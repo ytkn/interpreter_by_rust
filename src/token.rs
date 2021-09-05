@@ -1,15 +1,31 @@
 #[derive(Debug, PartialEq, Eq)]
 pub enum Token {
     PLUS,
+    MINUS,
+    ASTERISK,
+    SLASH,
+
+    LT,
+    GT,
+    EQ,
+    NE,
+
     ASSIGN,
+    BANG,
     SEMICOLON,
     LPAREN,
     RPAREN,
     COMMA,
     LBRACE,
     RBRACE,
+
     LET,
     FUNCTION,
+    TRUE,
+    FALSE,
+    IF,
+    ELSE,
+    RETURN,
 
     IDENT(String),
     INT(i32),
@@ -64,6 +80,11 @@ impl Lexer {
             return match &*ident {
                 "fn" => Token::FUNCTION,
                 "let" => Token::LET,
+                "true" => Token::TRUE,
+                "false" => Token::FALSE,
+                "if" => Token::IF,
+                "else" => Token::ELSE,
+                "return" => Token::RETURN,
                 _ => Token::IDENT(ident),
             };
         }
@@ -71,7 +92,13 @@ impl Lexer {
             return Token::INT(self.read_number());
         }
         let tok = match self.cur() {
-            '=' => Token::ASSIGN,
+            '=' => match self.peek() {
+                '=' => {
+                    self.next();
+                    Token::EQ
+                }
+                _ => Token::ASSIGN
+            },
             ';' => Token::SEMICOLON,
             '(' => Token::LPAREN,
             ')' => Token::RPAREN,
@@ -79,6 +106,18 @@ impl Lexer {
             '}' => Token::RBRACE,
             ',' => Token::COMMA,
             '+' => Token::PLUS,
+            '-' => Token::MINUS,
+            '*' => Token::ASTERISK,
+            '/' => Token::SLASH,
+            '<' => Token::LT,
+            '>' => Token::GT,
+            '!' => match self.peek() {
+                '=' => {
+                    self.next();
+                    Token::NE
+                },
+                _ => Token::BANG
+            },
             x => unreachable!(format!("unreachable: {}", x)),
         };
         self.next();
@@ -129,78 +168,91 @@ fn is_letter(c: char) -> bool {
     false
 }
 
-#[test]
-fn test_is_letter() {
-    assert!(is_letter('c'));
-    assert!(is_letter('A'));
-    assert!(is_letter('X'));
-    assert!(is_letter('_'));
-    assert!(!is_letter('='));
-    assert!(!is_letter('{'));
-    assert!(!is_letter('1'));
-}
+#[cfg(test)]
+mod test {
+    use crate::token::is_letter;
+    use crate::token::Lexer;
+    use crate::token::Token;
 
-
-#[test]
-fn test_lexer() {
-    let input = "
-    let ten = 10;
-    let five = 5;
-
-    let add = fn(x, y) {
-        x+y;
-    };
-    let result = add(x, y);
-    ";
-    let mut lexer = Lexer::new(input);
-    let mut tokens = Vec::new();
-    while !lexer.at_eof() {
-        let tok = lexer.next_token();
-        tokens.push(tok);
+    #[test]
+    fn test_is_letter() {
+        assert!(is_letter('c'));
+        assert!(is_letter('A'));
+        assert!(is_letter('X'));
+        assert!(is_letter('_'));
+        assert!(!is_letter('='));
+        assert!(!is_letter('{'));
+        assert!(!is_letter('1'));
     }
-    dbg!(&tokens);
-    let expected = [
-        Token::LET,
-        Token::IDENT("ten".to_string()),
-        Token::ASSIGN,
-        Token::INT(10),
-        Token::SEMICOLON,
-        Token::LET,
-        Token::IDENT("five".to_string()),
-        Token::ASSIGN,
-        Token::INT(5),
-        Token::SEMICOLON,
-        Token::LET,
-        Token::IDENT("add".to_string()),
-        Token::ASSIGN,
-        Token::FUNCTION,
-        Token::LPAREN,
-        Token::IDENT("x".to_string()),
-        Token::COMMA,
-        Token::IDENT("y".to_string()),
-        Token::RPAREN,
-        Token::LBRACE,
-        Token::IDENT("x".to_string()),
-        Token::PLUS,
-        Token::IDENT("y".to_string()),
-        Token::SEMICOLON,
-        Token::RBRACE,
-        Token::SEMICOLON,
-        Token::LET,
-        Token::IDENT("result".to_string()),
-        Token::ASSIGN,
-        Token::IDENT("add".to_string()),
-        Token::LPAREN,
-        Token::IDENT("x".to_string()),
-        Token::COMMA,
-        Token::IDENT("y".to_string()),
-        Token::RPAREN,
-        Token::SEMICOLON,
-        Token::EOF,
-    ];
-    assert_eq!(expected.len(), tokens.len());
-    for i in 0..expected.len() {
-        assert_eq!(expected[i], tokens[i]);
+
+    #[test]
+    fn test_lexer() {
+        let input = "
+        let ten = 10;
+        let five = 5;
+
+        let add = fn(x, y) {
+            x+y;
+        };
+        let result = add(x, y);
+        if(x != 100-20) {
+            return x/100;
+        }
+        if(x+y == 2) {
+            return result;
+        }else{
+            return result*2;
+        }
+        ";
+        let mut lexer = Lexer::new(input);
+        let mut tokens = Vec::new();
+        while !lexer.at_eof() {
+            let tok = lexer.next_token();
+            tokens.push(tok);
+        }
+        dbg!(&tokens);
+        let expected = [
+            Token::LET,
+            Token::IDENT("ten".to_string()),
+            Token::ASSIGN,
+            Token::INT(10),
+            Token::SEMICOLON,
+            Token::LET,
+            Token::IDENT("five".to_string()),
+            Token::ASSIGN,
+            Token::INT(5),
+            Token::SEMICOLON,
+            Token::LET,
+            Token::IDENT("add".to_string()),
+            Token::ASSIGN,
+            Token::FUNCTION,
+            Token::LPAREN,
+            Token::IDENT("x".to_string()),
+            Token::COMMA,
+            Token::IDENT("y".to_string()),
+            Token::RPAREN,
+            Token::LBRACE,
+            Token::IDENT("x".to_string()),
+            Token::PLUS,
+            Token::IDENT("y".to_string()),
+            Token::SEMICOLON,
+            Token::RBRACE,
+            Token::SEMICOLON,
+            Token::LET,
+            Token::IDENT("result".to_string()),
+            Token::ASSIGN,
+            Token::IDENT("add".to_string()),
+            Token::LPAREN,
+            Token::IDENT("x".to_string()),
+            Token::COMMA,
+            Token::IDENT("y".to_string()),
+            Token::RPAREN,
+            Token::SEMICOLON,
+            Token::EOF,
+        ];
+        assert_eq!(expected.len(), tokens.len());
+        for i in 0..expected.len() {
+            assert_eq!(expected[i], tokens[i]);
+        }
     }
 }
-

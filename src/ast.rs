@@ -312,6 +312,7 @@ impl Parser {
             Token::INT(_) => self.parse_int_literal(),
             Token::TRUE | Token::FALSE => self.parse_boolean(),
             Token::BANG | Token::MINUS => self.parse_prefix_expression(),
+            Token::LPAREN => self.parse_grouped_expression(),
             _ => panic!("{}", self.cur_token()),
         };
         while self.peek_token() != Token::SEMICOLON && precedence < self.cur_precedence() {
@@ -342,6 +343,13 @@ impl Parser {
         self.next();
         let right = self.parse_expression(precedence(token.clone()));
         Box::new(InfixExpression { token, left, right })
+    }
+
+    fn parse_grouped_expression(&mut self) -> Box<dyn Expression> {
+        self.expect_token(Token::LPAREN);
+        let expression = self.parse_expression(LOWEST);
+        self.expect_token(Token::RPAREN);
+        expression
     }
 
     fn parse_int_literal(&mut self) -> Box<dyn Expression> {
@@ -381,6 +389,8 @@ mod test {
             ("5 > 4 == true;", "((5 > 4) == true)"),
             ("5 < 4 != true;", "((5 < 4) != true)"),
             ("5 < 4 == false;", "((5 < 4) == false)"),
+            ("(a+b)*c;", "((a + b) * c)"),
+            ("-(5+5);", "(-(5 + 5))"),
         ];
         for (input, exptexced) in test_cases {
             let mut lexer = Lexer::new(input);

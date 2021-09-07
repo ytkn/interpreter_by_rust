@@ -267,6 +267,15 @@ impl Parser {
         ret
     }
 
+    fn expect_bool(&mut self) -> Token {
+        let token = self.cur_token();
+        if token != Token::TRUE && token != Token::FALSE {
+            panic!("expected boolean at {} th token", self.pos)
+        }
+        self.next();
+        token
+    }
+
     fn parse_let_statement(&mut self) -> Box<dyn Statement> {
         self.expect_token(Token::LET);
         let ident = Identifier {
@@ -301,6 +310,7 @@ impl Parser {
         let mut left = match self.cur_token() {
             Token::IDENT(_) => self.parse_ident(),
             Token::INT(_) => self.parse_int_literal(),
+            Token::TRUE | Token::FALSE => self.parse_boolean(),
             Token::BANG | Token::MINUS => self.parse_prefix_expression(),
             _ => panic!("{}", self.cur_token()),
         };
@@ -339,6 +349,11 @@ impl Parser {
         Box::new(IntLiteral { token })
     }
 
+    fn parse_boolean(&mut self) -> Box<dyn Expression> {
+        let token = self.expect_bool();
+        Box::new(Boolean { token })
+    }
+
     fn parse_ident(&mut self) -> Box<dyn Expression> {
         let token = self.expect_ident();
         Box::new(Identifier { token })
@@ -363,6 +378,9 @@ mod test {
             ("a+b*c+d/e-f;", "(((a + (b * c)) + (d / e)) - f)"),
             ("5 > 4 == 3 < 4;", "((5 > 4) == (3 < 4))"),
             ("5 > 4 != 3 < 4;", "((5 > 4) != (3 < 4))"),
+            ("5 > 4 == true;", "((5 > 4) == true)"),
+            ("5 < 4 != true;", "((5 < 4) != true)"),
+            ("5 < 4 == false;", "((5 < 4) == false)"),
         ];
         for (input, exptexced) in test_cases {
             let mut lexer = Lexer::new(input);

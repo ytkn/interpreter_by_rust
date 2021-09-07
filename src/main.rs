@@ -1,5 +1,5 @@
-use std::io::Write;
 use interpreter::token::Lexer;
+use std::io::Write;
 
 fn main() {
     loop {
@@ -11,7 +11,7 @@ fn main() {
             println!("bye!");
             break;
         }
-        let input= s.as_str();
+        let input = s.as_str();
         let mut lexer = Lexer::new(input);
         let mut tokens = Vec::new();
         while !lexer.at_eof() {

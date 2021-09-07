@@ -1,4 +1,6 @@
-#[derive(Debug, PartialEq, Eq)]
+use std::fmt;
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Token {
     PLUS,
     MINUS,
@@ -30,6 +32,39 @@ pub enum Token {
     IDENT(String),
     INT(i32),
     EOF,
+}
+
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Token::IDENT(_) => write!(f, "ident"),
+            Token::INT(_) => write!(f, "int"),
+            Token::PLUS => write!(f, "+"),
+            Token::MINUS => write!(f, "-"),
+            Token::ASTERISK => write!(f, "*"),
+            Token::SLASH => write!(f, "/"),
+            Token::LT => write!(f, "<"),
+            Token::GT => write!(f, ">"),
+            Token::EQ => write!(f, "=="),
+            Token::NE => write!(f, "!="),
+            Token::ASSIGN => todo!(),
+            Token::BANG => todo!(),
+            Token::SEMICOLON => write!(f, ";"),
+            Token::LPAREN => todo!(),
+            Token::RPAREN => todo!(),
+            Token::COMMA => todo!(),
+            Token::LBRACE => todo!(),
+            Token::RBRACE => todo!(),
+            Token::LET => write!(f, "let"),
+            Token::FUNCTION => todo!(),
+            Token::TRUE => todo!(),
+            Token::FALSE => todo!(),
+            Token::IF => todo!(),
+            Token::ELSE => todo!(),
+            Token::RETURN => todo!(),
+            Token::EOF => todo!(),
+        }
+    }
 }
 
 pub struct Lexer {
@@ -97,7 +132,7 @@ impl Lexer {
                     self.next();
                     Token::EQ
                 }
-                _ => Token::ASSIGN
+                _ => Token::ASSIGN,
             },
             ';' => Token::SEMICOLON,
             '(' => Token::LPAREN,
@@ -115,8 +150,8 @@ impl Lexer {
                 '=' => {
                     self.next();
                     Token::NE
-                },
-                _ => Token::BANG
+                }
+                _ => Token::BANG,
             },
             x => unreachable!(format!("unreachable: {}", x)),
         };

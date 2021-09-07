@@ -5,6 +5,8 @@ const EQUALS: i32 = 1;
 const LESSGREATER: i32 = 2;
 const SUM: i32 = 3;
 const PRODUCT: i32 = 4;
+const PREFIX: i32 = 5;
+const CALL: i32 = 6;
 
 fn precedence(token: Token) -> i32 {
     match token {
@@ -63,6 +65,26 @@ impl AstNode for IntLiteral {
 
 impl Expression for IntLiteral {}
 
+struct Boolean {
+    token: Token,
+}
+
+impl AstNode for Boolean {
+    fn token_literal(&self) -> Token {
+        self.token.clone()
+    }
+
+    fn to_string(&self) -> String {
+        match self.token {
+            Token::TRUE => "true".to_string(),
+            Token::FALSE => "false".to_string(),
+            _ => panic!(),
+        }
+    }
+}
+
+impl Expression for Boolean {}
+
 struct LetStatement {
     token: Token,
     ident: Identifier,
@@ -113,7 +135,7 @@ impl AstNode for ExpressionStatement {
     }
 
     fn to_string(&self) -> String {
-        format!("({}, {})", self.token, self.return_value.to_string())
+        format!("{}", self.return_value.to_string())
     }
 }
 
@@ -129,7 +151,7 @@ impl AstNode for PrefixExpression {
         self.token.clone()
     }
     fn to_string(&self) -> String {
-        format!("({}, {})", self.token, self.right.to_string())
+        format!("({}{})", self.token, self.right.to_string())
     }
 }
 
@@ -202,10 +224,8 @@ impl Parser {
         let mut statements: Vec<Box<dyn Statement>> = Vec::new();
         while self.cur_token() != Token::EOF {
             match self.cur_token() {
-                Token::LET => {
-                    statements.push(Box::new(self.parse_let_statement()));
-                }
-                _ => unreachable!(),
+                Token::LET => statements.push(self.parse_let_statement()),
+                _ => statements.push(self.parse_expression_statement()),
             }
         }
         Program { statements }
@@ -247,7 +267,7 @@ impl Parser {
         ret
     }
 
-    fn parse_let_statement(&mut self) -> LetStatement {
+    fn parse_let_statement(&mut self) -> Box<dyn Statement> {
         self.expect_token(Token::LET);
         let ident = Identifier {
             token: self.expect_ident(),
@@ -259,7 +279,22 @@ impl Parser {
             value: self.parse_expression(precedence(Token::ASSIGN)),
         };
         self.expect_token(Token::SEMICOLON);
-        stmt
+        Box::new(stmt)
+    }
+
+    fn parse_return_statement(&mut self) -> ReturnStatement {
+        self.expect_token(Token::RETURN);
+        todo!()
+    }
+
+    fn parse_expression_statement(&mut self) -> Box<dyn Statement> {
+        let token = self.cur_token();
+        let stmt = ExpressionStatement {
+            token,
+            return_value: self.parse_expression(LOWEST),
+        };
+        self.expect_token(Token::SEMICOLON);
+        Box::new(stmt)
     }
 
     fn parse_expression(&mut self, precedence: i32) -> Box<dyn Expression> {
@@ -285,19 +320,10 @@ impl Parser {
         left
     }
 
-    fn parse_return_statement(&mut self) -> ReturnStatement {
-        self.expect_token(Token::RETURN);
-        todo!()
-    }
-
-    fn parse_expression_statement(&mut self) -> ExpressionStatement {
-        todo!()
-    }
-
     fn parse_prefix_expression(&mut self) -> Box<dyn Expression> {
         let token = self.cur_token();
         self.next();
-        let right = self.parse_expression(precedence(token.clone()));
+        let right = self.parse_expression(PREFIX);
         Box::new(PrefixExpression { token, right })
     }
 
@@ -325,23 +351,30 @@ mod test {
     use crate::token::Lexer;
 
     #[test]
-    fn test() {
-        let input = "
-        let ten = 10-10*10-10*9;
-        let five = 5/5*10;
-        let result = five+ten;
-        ";
-        let mut lexer = Lexer::new(input);
-        let mut tokens = Vec::new();
-        while !lexer.at_eof() {
-            let tok = lexer.next_token();
-            tokens.push(tok);
-        }
-        dbg!(&tokens);
-        let mut parser = Parser::new(tokens);
-        let prog = parser.parse_program();
-        for stmt in prog.statements {
-            println!("{}", stmt.to_string());
+    fn test_operator_precedence() {
+        let test_cases = [
+            ("-a * b;", "((-a) * b)"),
+            ("!-a;", "(!(-a))"),
+            ("a+b+ c;", "((a + b) + c)"),
+            ("a+b - c;", "((a + b) - c)"),
+            ("a*b*c;", "((a * b) * c)"),
+            ("a*b/c;", "((a * b) / c)"),
+            ("a+b/c;", "(a + (b / c))"),
+            ("a+b*c+d/e-f;", "(((a + (b * c)) + (d / e)) - f)"),
+            ("5 > 4 == 3 < 4;", "((5 > 4) == (3 < 4))"),
+            ("5 > 4 != 3 < 4;", "((5 > 4) != (3 < 4))"),
+        ];
+        for (input, exptexced) in test_cases {
+            let mut lexer = Lexer::new(input);
+            let mut tokens = Vec::new();
+            while !lexer.at_eof() {
+                let tok = lexer.next_token();
+                tokens.push(tok);
+            }
+            let mut parser = Parser::new(tokens);
+            let prog = parser.parse_program();
+            assert_eq!(prog.statements.len(), 1);
+            assert_eq!(prog.statements[0].to_string(), exptexced);
         }
     }
 }

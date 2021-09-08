@@ -162,7 +162,7 @@ impl AstNode for LetStatement {
 
     fn to_string(&self) -> String {
         format!(
-            "LET({} = {})",
+            "let {} = {}",
             self.ident.to_string(),
             self.value.to_string()
         )
@@ -301,7 +301,7 @@ pub struct Parser {
 }
 
 impl Parser {
-    fn new(tokens: Vec<Token>) -> Parser {
+    pub fn new(tokens: Vec<Token>) -> Parser {
         Parser { tokens, pos: 0 }
     }
     fn cur_token(&self) -> Token {
@@ -404,7 +404,9 @@ impl Parser {
             ident,
             value: self.parse_expression(precedence(Token::ASSIGN)),
         };
-        self.expect_token(Token::SEMICOLON);
+        if self.cur_token() == Token::SEMICOLON {
+            self.next();
+        }
         Box::new(stmt)
     }
 
@@ -424,6 +426,9 @@ impl Parser {
     fn parse_return_statement(&mut self) -> Box<ReturnStatement> {
         self.expect_token(Token::RETURN);
         let return_value = self.parse_expression(LOWEST);
+        if self.cur_token() == Token::SEMICOLON {
+            self.next();
+        }
         Box::new({
             ReturnStatement {
                 token: Token::RETURN,

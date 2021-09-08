@@ -1,4 +1,4 @@
-use interpreter::token::Lexer;
+use interpreter::{ast::Parser, token::Lexer};
 use std::io::Write;
 
 fn main() {
@@ -18,6 +18,10 @@ fn main() {
             let tok = lexer.next_token();
             tokens.push(tok);
         }
-        println!("{:?}", tokens);
+        let mut parser = Parser::new(tokens);
+        let prog = parser.parse_program();
+        for stmt in prog.statements {
+            println!("{}", stmt.to_string())
+        }
     }
 }

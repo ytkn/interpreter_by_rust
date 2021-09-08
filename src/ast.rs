@@ -141,6 +141,62 @@ impl AstNode for ExpressionStatement {
 
 impl Statement for ExpressionStatement {}
 
+struct IfExpression {
+    token: Token,
+    condition: Box<dyn Expression>,
+    consequense: Box<BlockStatement>,
+    alternative: Option<Box<BlockStatement>>,
+}
+
+impl AstNode for IfExpression {
+    fn token_literal(&self) -> Token {
+        self.token.clone()
+    }
+
+    fn to_string(&self) -> String {
+        match &self.alternative {
+            Some(statements) => format!(
+                "if{} {} else {}",
+                self.condition.to_string(),
+                self.consequense.to_string(),
+                statements.to_string()
+            ),
+            None => format!(
+                "if{} {}",
+                self.condition.to_string(),
+                self.consequense.to_string(),
+            ),
+        }
+    }
+}
+
+impl Expression for IfExpression {}
+
+struct BlockStatement {
+    token: Token,
+    statements: Vec<Box<dyn Statement>>,
+}
+
+fn statemens_to_string(statements: &Vec<Box<dyn Statement>>) -> String {
+    statements
+        .into_iter()
+        .map(|stmt| stmt.to_string())
+        .collect::<Vec<String>>()
+        .join("")
+}
+
+impl AstNode for BlockStatement {
+    fn token_literal(&self) -> Token {
+        self.token.clone()
+    }
+
+    fn to_string(&self) -> String {
+        statemens_to_string(&self.statements)
+    }
+}
+
+impl Statement for BlockStatement {}
+
 struct PrefixExpression {
     token: Token,
     right: Box<dyn Expression>,
@@ -223,12 +279,16 @@ impl Parser {
     pub fn parse_program(&mut self) -> Program {
         let mut statements: Vec<Box<dyn Statement>> = Vec::new();
         while self.cur_token() != Token::EOF {
-            match self.cur_token() {
-                Token::LET => statements.push(self.parse_let_statement()),
-                _ => statements.push(self.parse_expression_statement()),
-            }
+            statements.push(self.parse_statement());
         }
         Program { statements }
+    }
+
+    fn parse_statement(&mut self) -> Box<dyn Statement> {
+        match self.cur_token() {
+            Token::LET => self.parse_let_statement(),
+            _ => self.parse_expression_statement(),
+        }
     }
 
     fn expect_token(&mut self, token: Token) {
@@ -291,6 +351,19 @@ impl Parser {
         Box::new(stmt)
     }
 
+    fn parse_block_statement(&mut self) -> Box<BlockStatement> {
+        let mut statements = Vec::new();
+        self.expect_token(Token::LBRACE);
+        while self.cur_token() != Token::EOF && self.cur_token() != Token::RBRACE {
+            statements.push(self.parse_statement())
+        }
+        self.expect_token(Token::RBRACE);
+        Box::new(BlockStatement {
+            token: Token::LBRACE,
+            statements,
+        })
+    }
+
     fn parse_return_statement(&mut self) -> ReturnStatement {
         self.expect_token(Token::RETURN);
         todo!()
@@ -302,7 +375,10 @@ impl Parser {
             token,
             return_value: self.parse_expression(LOWEST),
         };
-        self.expect_token(Token::SEMICOLON);
+        // self.expect_token(Token::SEMICOLON);
+        if self.cur_token() == Token::SEMICOLON {
+            self.next();
+        }
         Box::new(stmt)
     }
 
@@ -313,7 +389,8 @@ impl Parser {
             Token::TRUE | Token::FALSE => self.parse_boolean(),
             Token::BANG | Token::MINUS => self.parse_prefix_expression(),
             Token::LPAREN => self.parse_grouped_expression(),
-            _ => panic!("{}", self.cur_token()),
+            Token::IF => self.parse_if_expression(),
+            _ => panic!("at {} th token {}", self.pos, self.cur_token()),
         };
         while self.peek_token() != Token::SEMICOLON && precedence < self.cur_precedence() {
             left = match self.cur_token() {
@@ -336,6 +413,27 @@ impl Parser {
         self.next();
         let right = self.parse_expression(PREFIX);
         Box::new(PrefixExpression { token, right })
+    }
+
+    fn parse_if_expression(&mut self) -> Box<dyn Expression> {
+        self.expect_token(Token::IF);
+        self.expect_token(Token::LPAREN);
+        let condition = self.parse_expression(LOWEST);
+        self.expect_token(Token::RPAREN);
+        let consequense = self.parse_block_statement();
+        let alternative = match self.cur_token() {
+            Token::ELSE => {
+                self.next();
+                Some(self.parse_block_statement())
+            }
+            _ => None,
+        };
+        Box::new(IfExpression {
+            token: Token::IF,
+            condition,
+            consequense,
+            alternative,
+        })
     }
 
     fn parse_infix_expression(&mut self, left: Box<dyn Expression>) -> Box<dyn Expression> {
@@ -376,21 +474,21 @@ mod test {
     #[test]
     fn test_operator_precedence() {
         let test_cases = [
-            ("-a * b;", "((-a) * b)"),
-            ("!-a;", "(!(-a))"),
-            ("a+b+ c;", "((a + b) + c)"),
-            ("a+b - c;", "((a + b) - c)"),
-            ("a*b*c;", "((a * b) * c)"),
-            ("a*b/c;", "((a * b) / c)"),
-            ("a+b/c;", "(a + (b / c))"),
-            ("a+b*c+d/e-f;", "(((a + (b * c)) + (d / e)) - f)"),
-            ("5 > 4 == 3 < 4;", "((5 > 4) == (3 < 4))"),
-            ("5 > 4 != 3 < 4;", "((5 > 4) != (3 < 4))"),
-            ("5 > 4 == true;", "((5 > 4) == true)"),
-            ("5 < 4 != true;", "((5 < 4) != true)"),
-            ("5 < 4 == false;", "((5 < 4) == false)"),
-            ("(a+b)*c;", "((a + b) * c)"),
-            ("-(5+5);", "(-(5 + 5))"),
+            ("-a * b", "((-a) * b)"),
+            ("!-a", "(!(-a))"),
+            ("a+b+ c", "((a + b) + c)"),
+            ("a+b - c", "((a + b) - c)"),
+            ("a*b*c", "((a * b) * c)"),
+            ("a*b/c", "((a * b) / c)"),
+            ("a+b/c", "(a + (b / c))"),
+            ("a+b*c+d/e-f", "(((a + (b * c)) + (d / e)) - f)"),
+            ("5 > 4 == 3 < 4", "((5 > 4) == (3 < 4))"),
+            ("5 > 4 != 3 < 4", "((5 > 4) != (3 < 4))"),
+            ("5 > 4 == true", "((5 > 4) == true)"),
+            ("5 < 4 != true", "((5 < 4) != true)"),
+            ("5 < 4 == false", "((5 < 4) == false)"),
+            ("(a+b)*c", "((a + b) * c)"),
+            ("-(5+5)", "(-(5 + 5))"),
         ];
         for (input, exptexced) in test_cases {
             let mut lexer = Lexer::new(input);
@@ -403,6 +501,29 @@ mod test {
             let prog = parser.parse_program();
             assert_eq!(prog.statements.len(), 1);
             assert_eq!(prog.statements[0].to_string(), exptexced);
+        }
+    }
+    #[test]
+    fn test_if_expression() {
+        let test_cases = [(
+            "if(x < y) {
+                y-x
+            } else {
+                x-y
+            }",
+            "",
+        )];
+        for (input, exptexced) in test_cases {
+            let mut lexer = Lexer::new(input);
+            let mut tokens = Vec::new();
+            while !lexer.at_eof() {
+                let tok = lexer.next_token();
+                tokens.push(tok);
+            }
+            dbg!(&tokens);
+            let mut parser = Parser::new(tokens);
+            let prog = parser.parse_program();
+            println!("{}", prog.statements[0].to_string());
         }
     }
 }

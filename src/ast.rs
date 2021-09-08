@@ -14,6 +14,7 @@ fn precedence(token: Token) -> i32 {
         Token::LT | Token::GT => LESSGREATER,
         Token::PLUS | Token::MINUS => SUM,
         Token::ASTERISK | Token::SLASH => PRODUCT,
+        Token::LPAREN => CALL,
         _ => LOWEST, // 大丈夫？
     }
 }
@@ -33,6 +34,14 @@ fn statemens_to_string(statements: &Vec<Box<dyn Statement>>) -> String {
         .map(|stmt| stmt.to_string())
         .collect::<Vec<String>>()
         .join("")
+}
+
+fn expressions_to_string(statements: &Vec<Box<dyn Expression>>, sep: &str) -> String {
+    statements
+        .into_iter()
+        .map(|stmt| stmt.to_string())
+        .collect::<Vec<String>>()
+        .join(sep)
 }
 
 struct Identifier {
@@ -98,6 +107,28 @@ impl AstNode for FunctionLiteral {
 
 impl Expression for FunctionLiteral {}
 
+struct FunctionCall {
+    token: Token,
+    function: Box<dyn Expression>,
+    args: Vec<Box<dyn Expression>>,
+}
+
+impl AstNode for FunctionCall {
+    fn token_literal(&self) -> Token {
+        self.token.clone()
+    }
+
+    fn to_string(&self) -> String {
+        format!(
+            "{}({})",
+            self.function.to_string(),
+            expressions_to_string(&self.args, ", ")
+        )
+    }
+}
+
+impl Expression for FunctionCall {}
+
 struct Boolean {
     token: Token,
 }
@@ -151,7 +182,7 @@ impl AstNode for ReturnStatement {
     }
 
     fn to_string(&self) -> String {
-        format!("RETURN({})", self.return_value.to_string())
+        format!("return {}", self.return_value.to_string())
     }
 }
 
@@ -312,6 +343,7 @@ impl Parser {
     fn parse_statement(&mut self) -> Box<dyn Statement> {
         match self.cur_token() {
             Token::LET => self.parse_let_statement(),
+            Token::RETURN => self.parse_return_statement(),
             _ => self.parse_expression_statement(),
         }
     }
@@ -323,7 +355,7 @@ impl Parser {
             _ => {
                 if self.cur_token() != token {
                     panic!(
-                        "token does not match at {} th token ({}). expected {}",
+                        "token does not match at {} th token '{}'. expected {}",
                         self.pos,
                         self.cur_token(),
                         token
@@ -389,9 +421,15 @@ impl Parser {
         })
     }
 
-    fn parse_return_statement(&mut self) -> ReturnStatement {
+    fn parse_return_statement(&mut self) -> Box<ReturnStatement> {
         self.expect_token(Token::RETURN);
-        todo!()
+        let return_value = self.parse_expression(LOWEST);
+        Box::new({
+            ReturnStatement {
+                token: Token::RETURN,
+                return_value,
+            }
+        })
     }
 
     fn parse_expression_statement(&mut self) -> Box<dyn Statement> {
@@ -427,6 +465,7 @@ impl Parser {
                 | Token::NE
                 | Token::LT
                 | Token::GT => self.parse_infix_expression(left),
+                Token::LPAREN => self.parse_function_call(left),
                 _ => panic!(),
             };
         }
@@ -468,11 +507,40 @@ impl Parser {
         Box::new(InfixExpression { token, left, right })
     }
 
-    fn parse_function_literal(&mut self) -> Box<dyn Expression> {
+    fn parse_function_call(&mut self, function: Box<dyn Expression>) -> Box<FunctionCall> {
+        let args = self.parse_call_args();
+        Box::new({
+            FunctionCall {
+                token: Token::LPAREN,
+                function,
+                args,
+            }
+        })
+    }
+
+    fn parse_call_args(&mut self) -> Vec<Box<dyn Expression>> {
+        self.expect_token(Token::LPAREN);
+        let mut params = Vec::new();
+        while self.cur_token() != Token::RPAREN {
+            params.push(self.parse_expression(LOWEST));
+            if self.cur_token() != Token::COMMA {
+                break;
+            }
+            self.expect_token(Token::COMMA);
+        }
+        self.expect_token(Token::RPAREN);
+        params
+    }
+
+    fn parse_function_literal(&mut self) -> Box<FunctionLiteral> {
         self.expect_token(Token::FUNCTION);
         let params = self.parse_function_params();
         let body = self.parse_block_statement();
-        Box::new(FunctionLiteral{token: Token::FUNCTION, params, body})
+        Box::new(FunctionLiteral {
+            token: Token::FUNCTION,
+            params,
+            body,
+        })
     }
 
     fn parse_function_params(&mut self) -> Vec<Box<Identifier>> {
@@ -566,7 +634,6 @@ mod test {
                 let tok = lexer.next_token();
                 tokens.push(tok);
             }
-            dbg!(&tokens);
             let mut parser = Parser::new(tokens);
             let prog = parser.parse_program();
             assert_eq!(prog.statements[0].to_string(), exptexced);
@@ -579,6 +646,25 @@ mod test {
             ("fn(){}", "fn()"),
             ("fn(x){ x; }", "fn(x)x"),
             ("fn(x, y){ x+y; }", "fn(x, y)(x + y)"),
+        ];
+        for (input, exptexced) in test_cases {
+            let mut lexer = Lexer::new(input);
+            let mut tokens = Vec::new();
+            while !lexer.at_eof() {
+                let tok = lexer.next_token();
+                tokens.push(tok);
+            }
+            let mut parser = Parser::new(tokens);
+            let prog = parser.parse_program();
+            assert_eq!(prog.statements[0].to_string(), exptexced);
+        }
+    }
+
+    #[test]
+    fn test_fn_call() {
+        let test_cases = [
+            ("add(a, b, c)", "add(a, b, c)"),
+            ("fn(x, y){ x+y; }(1, 2)", "fn(x, y)(x + y)(1, 2)"),
         ];
         for (input, exptexced) in test_cases {
             let mut lexer = Lexer::new(input);

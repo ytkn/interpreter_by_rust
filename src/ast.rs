@@ -27,6 +27,14 @@ pub trait Statement: AstNode {}
 
 trait Expression: AstNode {}
 
+fn statemens_to_string(statements: &Vec<Box<dyn Statement>>) -> String {
+    statements
+        .into_iter()
+        .map(|stmt| stmt.to_string())
+        .collect::<Vec<String>>()
+        .join("")
+}
+
 struct Identifier {
     token: Token,
 }
@@ -64,6 +72,31 @@ impl AstNode for IntLiteral {
 }
 
 impl Expression for IntLiteral {}
+
+struct FunctionLiteral {
+    token: Token,
+    params: Vec<Box<Identifier>>,
+    body: Box<BlockStatement>,
+}
+
+impl AstNode for FunctionLiteral {
+    fn token_literal(&self) -> Token {
+        self.token.clone()
+    }
+
+    fn to_string(&self) -> String {
+        let params_as_string = |params: &Vec<Box<Identifier>>| -> String {
+            params
+                .into_iter()
+                .map(|p| p.to_string())
+                .collect::<Vec<String>>()
+                .join(", ")
+        }(&self.params);
+        format!("fn({}){}", params_as_string, self.body.to_string())
+    }
+}
+
+impl Expression for FunctionLiteral {}
 
 struct Boolean {
     token: Token,
@@ -175,14 +208,6 @@ impl Expression for IfExpression {}
 struct BlockStatement {
     token: Token,
     statements: Vec<Box<dyn Statement>>,
-}
-
-fn statemens_to_string(statements: &Vec<Box<dyn Statement>>) -> String {
-    statements
-        .into_iter()
-        .map(|stmt| stmt.to_string())
-        .collect::<Vec<String>>()
-        .join("")
 }
 
 impl AstNode for BlockStatement {
@@ -375,7 +400,6 @@ impl Parser {
             token,
             return_value: self.parse_expression(LOWEST),
         };
-        // self.expect_token(Token::SEMICOLON);
         if self.cur_token() == Token::SEMICOLON {
             self.next();
         }
@@ -390,6 +414,7 @@ impl Parser {
             Token::BANG | Token::MINUS => self.parse_prefix_expression(),
             Token::LPAREN => self.parse_grouped_expression(),
             Token::IF => self.parse_if_expression(),
+            Token::FUNCTION => self.parse_function_literal(),
             _ => panic!("at {} th token {}", self.pos, self.cur_token()),
         };
         while self.peek_token() != Token::SEMICOLON && precedence < self.cur_precedence() {
@@ -443,6 +468,27 @@ impl Parser {
         Box::new(InfixExpression { token, left, right })
     }
 
+    fn parse_function_literal(&mut self) -> Box<dyn Expression> {
+        self.expect_token(Token::FUNCTION);
+        let params = self.parse_function_params();
+        let body = self.parse_block_statement();
+        Box::new(FunctionLiteral{token: Token::FUNCTION, params, body})
+    }
+
+    fn parse_function_params(&mut self) -> Vec<Box<Identifier>> {
+        self.expect_token(Token::LPAREN);
+        let mut params = Vec::new();
+        while self.cur_token() != Token::RPAREN {
+            params.push(self.parse_ident());
+            if self.cur_token() != Token::COMMA {
+                break;
+            }
+            self.expect_token(Token::COMMA);
+        }
+        self.expect_token(Token::RPAREN);
+        params
+    }
+
     fn parse_grouped_expression(&mut self) -> Box<dyn Expression> {
         self.expect_token(Token::LPAREN);
         let expression = self.parse_expression(LOWEST);
@@ -455,12 +501,12 @@ impl Parser {
         Box::new(IntLiteral { token })
     }
 
-    fn parse_boolean(&mut self) -> Box<dyn Expression> {
+    fn parse_boolean(&mut self) -> Box<Boolean> {
         let token = self.expect_bool();
         Box::new(Boolean { token })
     }
 
-    fn parse_ident(&mut self) -> Box<dyn Expression> {
+    fn parse_ident(&mut self) -> Box<Identifier> {
         let token = self.expect_ident();
         Box::new(Identifier { token })
     }
@@ -511,7 +557,7 @@ mod test {
             } else {
                 x-y
             }",
-            "",
+            "if(x < y) (y - x) else (x - y)",
         )];
         for (input, exptexced) in test_cases {
             let mut lexer = Lexer::new(input);
@@ -523,7 +569,27 @@ mod test {
             dbg!(&tokens);
             let mut parser = Parser::new(tokens);
             let prog = parser.parse_program();
-            println!("{}", prog.statements[0].to_string());
+            assert_eq!(prog.statements[0].to_string(), exptexced);
+        }
+    }
+
+    #[test]
+    fn test_fn_literal() {
+        let test_cases = [
+            ("fn(){}", "fn()"),
+            ("fn(x){ x; }", "fn(x)x"),
+            ("fn(x, y){ x+y; }", "fn(x, y)(x + y)"),
+        ];
+        for (input, exptexced) in test_cases {
+            let mut lexer = Lexer::new(input);
+            let mut tokens = Vec::new();
+            while !lexer.at_eof() {
+                let tok = lexer.next_token();
+                tokens.push(tok);
+            }
+            let mut parser = Parser::new(tokens);
+            let prog = parser.parse_program();
+            assert_eq!(prog.statements[0].to_string(), exptexced);
         }
     }
 }

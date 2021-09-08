@@ -10,6 +10,12 @@ pub struct EvalError {
     pub msg: String,
 }
 
+impl EvalError {
+    fn new(msg: String) -> EvalError {
+        EvalError { msg }
+    }
+}
+
 type EvalResult = Result<Object, EvalError>;
 
 impl ParseError {
@@ -339,7 +345,19 @@ impl AstNode for PrefixExpression {
     }
 
     fn eval(&self) -> EvalResult {
-        todo!()
+        let right = self.right.eval()?;
+        match self.token {
+            Token::BANG => match right {
+                Object::BOOLEAN(f) => Ok(Object::BOOLEAN(!f)),
+                Object::NULL => Ok(Object::BOOLEAN(true)),
+                _ => Ok(Object::BOOLEAN(false)),
+            },
+            Token::MINUS => match right {
+                Object::INTEGER(x) => Ok(Object::INTEGER(-x)),
+                _ => Err(EvalError::new("expected int before '-'".to_string())),
+            },
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -365,7 +383,26 @@ impl AstNode for InfixExpression {
     }
 
     fn eval(&self) -> EvalResult {
-        todo!()
+        let left_val = match self.left.eval()? {
+            Object::INTEGER(x) => x,
+            _ => Err(EvalError::new(format!("expected int for '{}'", self.token)))?,
+        };
+        let right_val = match self.right.eval()? {
+            Object::INTEGER(x) => x,
+            _ => Err(EvalError::new(format!("expected int for '{}'", self.token)))?,
+        };
+
+        match self.token {
+            Token::ASTERISK => Ok(Object::INTEGER(left_val * right_val)),
+            Token::SLASH => Ok(Object::INTEGER(left_val / right_val)),
+            Token::PLUS => Ok(Object::INTEGER(left_val + right_val)),
+            Token::MINUS => Ok(Object::INTEGER(left_val - right_val)),
+            Token::LT => Ok(Object::BOOLEAN(left_val < right_val)),
+            Token::GT => Ok(Object::BOOLEAN(left_val > right_val)),
+            Token::EQ => Ok(Object::BOOLEAN(left_val == right_val)),
+            Token::NE => Ok(Object::BOOLEAN(left_val != right_val)),
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -413,6 +450,28 @@ mod test_evaluator {
     fn test_eval_bool_literal() {
         assert_eq!("true", test_eval("true").unwrap().inspect());
         assert_eq!("false", test_eval("false").unwrap().inspect());
+    }
+
+    #[test]
+    fn test_eval_infix_operator() {
+        assert_eq!("10", test_eval("5+5").unwrap().inspect());
+        assert_eq!("109", test_eval("10*10+9").unwrap().inspect());
+        assert_eq!("100", test_eval("10+10*9").unwrap().inspect());
+        assert_eq!("false", test_eval("10 > 10*9").unwrap().inspect());
+        assert_eq!("true", test_eval("10 < 10*9").unwrap().inspect());
+        assert_eq!("true", test_eval("100 == 10+10*9").unwrap().inspect());
+        assert_eq!("false", test_eval("100 != 10+10*9").unwrap().inspect());
+    }
+
+    #[test]
+    fn test_eval_prefix_operator() {
+        assert_eq!("false", test_eval("!true").unwrap().inspect());
+        assert_eq!("true", test_eval("!false").unwrap().inspect());
+        assert_eq!("false", test_eval("!5").unwrap().inspect());
+        assert_eq!("true", test_eval("!!5").unwrap().inspect());
+        assert_eq!("false", test_eval("!!false").unwrap().inspect());
+        assert_eq!("-5", test_eval("-5").unwrap().inspect());
+        assert_eq!("-10", test_eval("-10").unwrap().inspect());
     }
 
     fn test_eval(input: &str) -> EvalResult {

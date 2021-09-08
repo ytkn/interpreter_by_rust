@@ -18,31 +18,6 @@ impl EvalError {
 
 type EvalResult = Result<Object, EvalError>;
 
-impl ParseError {
-    fn new(msg: String) -> ParseError {
-        ParseError { msg }
-    }
-}
-
-const LOWEST: i32 = 0;
-const EQUALS: i32 = 1;
-const LESSGREATER: i32 = 2;
-const SUM: i32 = 3;
-const PRODUCT: i32 = 4;
-const PREFIX: i32 = 5;
-const CALL: i32 = 6;
-
-fn precedence(token: Token) -> i32 {
-    match token {
-        Token::EQ | Token::NE => EQUALS,
-        Token::LT | Token::GT => LESSGREATER,
-        Token::PLUS | Token::MINUS => SUM,
-        Token::ASTERISK | Token::SLASH => PRODUCT,
-        Token::LPAREN => CALL,
-        _ => LOWEST, // 大丈夫？
-    }
-}
-
 pub trait AstNode {
     fn token_literal(&self) -> Token;
     fn to_string(&self) -> String;
@@ -248,7 +223,8 @@ impl AstNode for ReturnStatement {
     }
 
     fn eval(&self) -> EvalResult {
-        todo!()
+        let ret = self.return_value.eval()?;
+        Ok(Object::RERUTN(Box::new(ret)))
     }
 }
 
@@ -420,12 +396,14 @@ pub struct Program {
 }
 
 fn eval_statements(statements: &Vec<Box<dyn Statement>>) -> EvalResult {
-    // FIXME: 途中で変なのがあっても無視することになっている。
-    let last = statements.into_iter().map(|stmt| stmt.eval()).last();
-    match last {
-        Some(x) => x,
-        None => Ok(Object::NULL),
+    let mut ret = Object::NULL;
+    for stmt in statements {
+        ret = stmt.eval()?;
+        if let Object::RERUTN(_) = ret {
+            break;
+        }
     }
+    Ok(ret)
 }
 
 impl AstNode for Program {
@@ -438,7 +416,14 @@ impl AstNode for Program {
     }
 
     fn eval(&self) -> EvalResult {
-        eval_statements(&self.statements)
+        let mut ret = Object::NULL;
+        for stmt in &self.statements {
+            ret = stmt.eval()?;
+            if let Object::RERUTN(val) = ret {
+                return Ok(*val);
+            }
+        }
+        Ok(ret)
     }
 }
 
@@ -492,6 +477,12 @@ mod test_evaluator {
         test_eval_match("if(1+10/10 == 2){ 10 } else { 20 }", "10");
     }
 
+    #[test]
+    fn test_return() {
+        test_eval_match("if(true){ return 10 }", "10");
+        test_eval_match("if(true){ if(true) { return 10 } return 5 }", "10");
+    }
+
     fn test_eval_match(input: &str, expected: &str) {
         assert_eq!(test_eval(input).unwrap().inspect(), expected);
     }
@@ -506,6 +497,31 @@ mod test_evaluator {
         let mut parser = Parser::new(tokens);
         let prog = parser.parse_program().unwrap();
         prog.eval()
+    }
+}
+
+impl ParseError {
+    fn new(msg: String) -> ParseError {
+        ParseError { msg }
+    }
+}
+
+const LOWEST: i32 = 0;
+const EQUALS: i32 = 1;
+const LESSGREATER: i32 = 2;
+const SUM: i32 = 3;
+const PRODUCT: i32 = 4;
+const PREFIX: i32 = 5;
+const CALL: i32 = 6;
+
+fn precedence(token: Token) -> i32 {
+    match token {
+        Token::EQ | Token::NE => EQUALS,
+        Token::LT | Token::GT => LESSGREATER,
+        Token::PLUS | Token::MINUS => SUM,
+        Token::ASTERISK | Token::SLASH => PRODUCT,
+        Token::LPAREN => CALL,
+        _ => LOWEST, // 大丈夫？
     }
 }
 

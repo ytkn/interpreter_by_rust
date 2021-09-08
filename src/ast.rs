@@ -1,38 +1,27 @@
-use crate::token::Token;
+use crate::{object::Object, token::Token};
 
 #[derive(Debug)]
 pub struct ParseError {
     pub msg: String,
 }
 
-impl ParseError {
-    fn new(msg: String) -> ParseError {
-        ParseError { msg }
+#[derive(Debug)]
+pub struct EvalError {
+    pub msg: String,
+}
+
+impl EvalError {
+    fn new(msg: String) -> EvalError {
+        EvalError { msg }
     }
 }
 
-const LOWEST: i32 = 0;
-const EQUALS: i32 = 1;
-const LESSGREATER: i32 = 2;
-const SUM: i32 = 3;
-const PRODUCT: i32 = 4;
-const PREFIX: i32 = 5;
-const CALL: i32 = 6;
-
-fn precedence(token: Token) -> i32 {
-    match token {
-        Token::EQ | Token::NE => EQUALS,
-        Token::LT | Token::GT => LESSGREATER,
-        Token::PLUS | Token::MINUS => SUM,
-        Token::ASTERISK | Token::SLASH => PRODUCT,
-        Token::LPAREN => CALL,
-        _ => LOWEST, // 大丈夫？
-    }
-}
+type EvalResult = Result<Object, EvalError>;
 
 pub trait AstNode {
     fn token_literal(&self) -> Token;
     fn to_string(&self) -> String;
+    fn eval(&self) -> EvalResult;
 }
 
 pub trait Statement: AstNode {}
@@ -70,12 +59,25 @@ impl AstNode for Identifier {
             _ => panic!(),
         }
     }
+
+    fn eval(&self) -> EvalResult {
+        todo!()
+    }
 }
 
 impl Expression for Identifier {}
 
-struct IntLiteral {
+pub struct IntLiteral {
     token: Token,
+}
+
+impl IntLiteral {
+    fn value(&self) -> i32 {
+        match self.token {
+            Token::INT(x) => x,
+            _ => panic!(),
+        }
+    }
 }
 
 impl AstNode for IntLiteral {
@@ -88,6 +90,10 @@ impl AstNode for IntLiteral {
             Token::INT(x) => x.to_string(),
             _ => panic!(),
         }
+    }
+
+    fn eval(&self) -> EvalResult {
+        Ok(Object::INTEGER(self.value()))
     }
 }
 
@@ -114,6 +120,10 @@ impl AstNode for FunctionLiteral {
         }(&self.params);
         format!("fn({}){}", params_as_string, self.body.to_string())
     }
+
+    fn eval(&self) -> EvalResult {
+        todo!()
+    }
 }
 
 impl Expression for FunctionLiteral {}
@@ -136,6 +146,10 @@ impl AstNode for FunctionCall {
             expressions_to_string(&self.args, ", ")
         )
     }
+
+    fn eval(&self) -> EvalResult {
+        todo!()
+    }
 }
 
 impl Expression for FunctionCall {}
@@ -153,6 +167,14 @@ impl AstNode for Boolean {
         match self.token {
             Token::TRUE => "true".to_string(),
             Token::FALSE => "false".to_string(),
+            _ => panic!(),
+        }
+    }
+
+    fn eval(&self) -> EvalResult {
+        match self.token {
+            Token::TRUE => Ok(Object::BOOLEAN(true)),
+            Token::FALSE => Ok(Object::BOOLEAN(false)),
             _ => panic!(),
         }
     }
@@ -178,6 +200,10 @@ impl AstNode for LetStatement {
             self.value.to_string()
         )
     }
+
+    fn eval(&self) -> EvalResult {
+        todo!()
+    }
 }
 
 impl Statement for LetStatement {}
@@ -195,13 +221,18 @@ impl AstNode for ReturnStatement {
     fn to_string(&self) -> String {
         format!("return {}", self.return_value.to_string())
     }
+
+    fn eval(&self) -> EvalResult {
+        let ret = self.return_value.eval()?;
+        Ok(Object::RERUTN(Box::new(ret)))
+    }
 }
 
 impl Statement for ReturnStatement {}
 
 struct ExpressionStatement {
     token: Token,
-    return_value: Box<dyn Expression>,
+    value: Box<dyn Expression>,
 }
 
 impl AstNode for ExpressionStatement {
@@ -210,7 +241,11 @@ impl AstNode for ExpressionStatement {
     }
 
     fn to_string(&self) -> String {
-        format!("{}", self.return_value.to_string())
+        format!("{}", self.value.to_string())
+    }
+
+    fn eval(&self) -> EvalResult {
+        self.value.eval()
     }
 }
 
@@ -243,6 +278,17 @@ impl AstNode for IfExpression {
             ),
         }
     }
+
+    fn eval(&self) -> EvalResult {
+        let cond = self.condition.eval()?;
+        match cond {
+            Object::BOOLEAN(false) | Object::NULL => match &self.alternative {
+                Some(block) => block.eval(),
+                _ => Ok(Object::NULL),
+            },
+            _ => self.consequense.eval(),
+        }
+    }
 }
 
 impl Expression for IfExpression {}
@@ -260,6 +306,10 @@ impl AstNode for BlockStatement {
     fn to_string(&self) -> String {
         statemens_to_string(&self.statements)
     }
+
+    fn eval(&self) -> EvalResult {
+        eval_statements(&self.statements)
+    }
 }
 
 impl Statement for BlockStatement {}
@@ -275,6 +325,22 @@ impl AstNode for PrefixExpression {
     }
     fn to_string(&self) -> String {
         format!("({}{})", self.token, self.right.to_string())
+    }
+
+    fn eval(&self) -> EvalResult {
+        let right = self.right.eval()?;
+        match self.token {
+            Token::BANG => match right {
+                Object::BOOLEAN(f) => Ok(Object::BOOLEAN(!f)),
+                Object::NULL => Ok(Object::BOOLEAN(true)),
+                _ => Ok(Object::BOOLEAN(false)),
+            },
+            Token::MINUS => match right {
+                Object::INTEGER(x) => Ok(Object::INTEGER(-x)),
+                _ => Err(EvalError::new("expected int before '-'".to_string())),
+            },
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -298,12 +364,165 @@ impl AstNode for InfixExpression {
             self.right.to_string()
         )
     }
+
+    fn eval(&self) -> EvalResult {
+        let left_val = match self.left.eval()? {
+            Object::INTEGER(x) => x,
+            _ => Err(EvalError::new(format!("expected int for '{}'", self.token)))?,
+        };
+        let right_val = match self.right.eval()? {
+            Object::INTEGER(x) => x,
+            _ => Err(EvalError::new(format!("expected int for '{}'", self.token)))?,
+        };
+
+        match self.token {
+            Token::ASTERISK => Ok(Object::INTEGER(left_val * right_val)),
+            Token::SLASH => Ok(Object::INTEGER(left_val / right_val)),
+            Token::PLUS => Ok(Object::INTEGER(left_val + right_val)),
+            Token::MINUS => Ok(Object::INTEGER(left_val - right_val)),
+            Token::LT => Ok(Object::BOOLEAN(left_val < right_val)),
+            Token::GT => Ok(Object::BOOLEAN(left_val > right_val)),
+            Token::EQ => Ok(Object::BOOLEAN(left_val == right_val)),
+            Token::NE => Ok(Object::BOOLEAN(left_val != right_val)),
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl Expression for InfixExpression {}
 
 pub struct Program {
     pub statements: Vec<Box<dyn Statement>>,
+}
+
+fn eval_statements(statements: &Vec<Box<dyn Statement>>) -> EvalResult {
+    let mut ret = Object::NULL;
+    for stmt in statements {
+        ret = stmt.eval()?;
+        if let Object::RERUTN(_) = ret {
+            break;
+        }
+    }
+    Ok(ret)
+}
+
+impl AstNode for Program {
+    fn token_literal(&self) -> Token {
+        todo!()
+    }
+
+    fn to_string(&self) -> String {
+        todo!()
+    }
+
+    fn eval(&self) -> EvalResult {
+        let mut ret = Object::NULL;
+        for stmt in &self.statements {
+            ret = stmt.eval()?;
+            if let Object::RERUTN(val) = ret {
+                return Ok(*val);
+            }
+        }
+        Ok(ret)
+    }
+}
+
+#[cfg(test)]
+mod test_evaluator {
+    use crate::ast::Parser;
+    use crate::token::Lexer;
+
+    use super::{AstNode, EvalResult};
+    #[test]
+    fn test_eval_int_literal() {
+        assert_eq!("5", test_eval("5").unwrap().inspect());
+        assert_eq!("10", test_eval("10").unwrap().inspect());
+    }
+    #[test]
+    fn test_eval_bool_literal() {
+        assert_eq!("true", test_eval("true").unwrap().inspect());
+        assert_eq!("false", test_eval("false").unwrap().inspect());
+    }
+
+    #[test]
+    fn test_eval_infix_operator() {
+        test_eval_match("5+5", "10");
+        test_eval_match("5+5", "10");
+        test_eval_match("10*10+9", "109");
+        test_eval_match("10+10*9", "100");
+        test_eval_match("10 > 10*9", "false");
+        test_eval_match("10 < 10*9", "true");
+        test_eval_match("100 == 10+10*9", "true");
+        test_eval_match("100 != 10+10*9", "false");
+        test_eval_match("180 != (10+10)*9", "false");
+    }
+
+    #[test]
+    fn test_eval_prefix_operator() {
+        assert_eq!("false", test_eval("!true").unwrap().inspect());
+        assert_eq!("true", test_eval("!false").unwrap().inspect());
+        assert_eq!("false", test_eval("!5").unwrap().inspect());
+        assert_eq!("true", test_eval("!!5").unwrap().inspect());
+        assert_eq!("false", test_eval("!!false").unwrap().inspect());
+        assert_eq!("-5", test_eval("-5").unwrap().inspect());
+        assert_eq!("-10", test_eval("-10").unwrap().inspect());
+    }
+
+    #[test]
+    fn test_if_else() {
+        test_eval_match("if(true){ 10 }", "10");
+        test_eval_match("if(true){ 10 } else { 20 }", "10");
+        test_eval_match("if(false){ 10 } else { 20 }", "20");
+        test_eval_match("if(1*10 == 20){ 10 } else { 20 }", "20");
+        test_eval_match("if(1+10/10 == 2){ 10 } else { 20 }", "10");
+    }
+
+    #[test]
+    fn test_return() {
+        test_eval_match("if(true){ return 10 }", "10");
+        test_eval_match("if(true){ if(true) { return 10 } return 5 }", "10");
+    }
+
+    fn test_eval_match(input: &str, expected: &str) {
+        assert_eq!(test_eval(input).unwrap().inspect(), expected);
+    }
+
+    fn test_eval(input: &str) -> EvalResult {
+        let mut lexer = Lexer::new(input);
+        let mut tokens = Vec::new();
+        while !lexer.at_eof() {
+            let tok = lexer.next_token();
+            tokens.push(tok);
+        }
+        let mut parser = Parser::new(tokens);
+        let prog = parser.parse_program().unwrap();
+        prog.eval()
+    }
+}
+
+impl ParseError {
+    fn new(msg: String) -> ParseError {
+        ParseError { msg }
+    }
+}
+
+const LOWEST: i32 = 0;
+const EQUALS: i32 = 1;
+const LESSGREATER: i32 = 2;
+const SUM: i32 = 3;
+const PRODUCT: i32 = 4;
+const PREFIX: i32 = 5;
+const CALL: i32 = 6;
+
+fn precedence(token: Token) -> i32 {
+    match token {
+        Token::EQ | Token::NE => EQUALS,
+        Token::LT | Token::GT => LESSGREATER,
+        Token::PLUS | Token::MINUS => SUM,
+        Token::ASTERISK | Token::SLASH => PRODUCT,
+        Token::LPAREN => CALL,
+        _ => LOWEST, // 大丈夫？
+    }
 }
 
 pub struct Parser {
@@ -333,10 +552,6 @@ impl Parser {
 
     fn cur_precedence(&self) -> i32 {
         precedence(self.cur_token())
-    }
-
-    fn peek_precedence(&self) -> i32 {
-        precedence(self.peek_token())
     }
 
     fn next(&mut self) {
@@ -465,7 +680,7 @@ impl Parser {
         let token = self.cur_token();
         let stmt = ExpressionStatement {
             token,
-            return_value: self.parse_expression(LOWEST)?,
+            value: self.parse_expression(LOWEST)?,
         };
         if self.cur_token() == Token::SEMICOLON {
             self.next();
@@ -620,7 +835,7 @@ impl Parser {
 }
 
 #[cfg(test)]
-mod test {
+mod test_parser {
     use crate::ast::Parser;
     use crate::token::Lexer;
 

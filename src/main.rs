@@ -17,10 +17,15 @@ fn main() {
         let mut parser = Parser::new(tokens);
         let result = parser.parse_program();
         match result {
-            Ok(prog) => prog
-                .statements
-                .into_iter()
-                .for_each(|stmt| println!("{}", stmt.to_string())),
+            Ok(prog) => prog.statements.into_iter().for_each(|stmt| {
+                println!(
+                    "{:?}",
+                    match stmt.eval() {
+                        Ok(obj) => obj.inspect(),
+                        Err(err) => err.msg,
+                    }
+                )
+            }),
             Err(err) => println!("{}", err.msg),
         }
     }

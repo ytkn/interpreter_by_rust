@@ -1,4 +1,4 @@
-use crate::{object::Object, token::Token};
+use crate::{environment::Environment, object::Object, token::Token};
 
 #[derive(Debug)]
 pub struct EvalError {
@@ -16,7 +16,7 @@ type EvalResult = Result<Object, EvalError>;
 pub trait AstNode {
     fn token_literal(&self) -> Token;
     fn to_string(&self) -> String;
-    fn eval(&self) -> EvalResult;
+    fn eval(&self, env: &mut Environment) -> EvalResult;
 }
 
 pub trait Statement: AstNode {}
@@ -55,8 +55,15 @@ impl AstNode for Identifier {
         }
     }
 
-    fn eval(&self) -> EvalResult {
-        todo!()
+    fn eval(&self, env: &mut Environment) -> EvalResult {
+        let name = match &self.token {
+            Token::IDENT(name) => name,
+            _ => unreachable!(),
+        };
+        match env.get(name) {
+            Some(x) => Ok(x),
+            None => Err(EvalError::new(format!("{} not found", name))),
+        }
     }
 }
 
@@ -87,7 +94,7 @@ impl AstNode for IntLiteral {
         }
     }
 
-    fn eval(&self) -> EvalResult {
+    fn eval(&self, _env: &mut Environment) -> EvalResult {
         Ok(Object::INTEGER(self.value()))
     }
 }
@@ -116,7 +123,7 @@ impl AstNode for FunctionLiteral {
         format!("fn({}){}", params_as_string, self.body.to_string())
     }
 
-    fn eval(&self) -> EvalResult {
+    fn eval(&self, _env: &mut Environment) -> EvalResult {
         todo!()
     }
 }
@@ -142,7 +149,7 @@ impl AstNode for FunctionCall {
         )
     }
 
-    fn eval(&self) -> EvalResult {
+    fn eval(&self, _env: &mut Environment) -> EvalResult {
         todo!()
     }
 }
@@ -166,7 +173,7 @@ impl AstNode for Boolean {
         }
     }
 
-    fn eval(&self) -> EvalResult {
+    fn eval(&self, _env: &mut Environment) -> EvalResult {
         match self.token {
             Token::TRUE => Ok(Object::BOOLEAN(true)),
             Token::FALSE => Ok(Object::BOOLEAN(false)),
@@ -196,8 +203,13 @@ impl AstNode for LetStatement {
         )
     }
 
-    fn eval(&self) -> EvalResult {
-        todo!()
+    fn eval(&self, env: &mut Environment) -> EvalResult {
+        let value = self.value.eval(env)?;
+        match &self.ident.token {
+            Token::IDENT(name) => env.set(name.clone(), value.clone()),
+            _ => unreachable!(),
+        }
+        Ok(value)
     }
 }
 
@@ -217,8 +229,8 @@ impl AstNode for ReturnStatement {
         format!("return {}", self.return_value.to_string())
     }
 
-    fn eval(&self) -> EvalResult {
-        let ret = self.return_value.eval()?;
+    fn eval(&self, env: &mut Environment) -> EvalResult {
+        let ret = self.return_value.eval(env)?;
         Ok(Object::RERUTN(Box::new(ret)))
     }
 }
@@ -239,8 +251,8 @@ impl AstNode for ExpressionStatement {
         format!("{}", self.value.to_string())
     }
 
-    fn eval(&self) -> EvalResult {
-        self.value.eval()
+    fn eval(&self, env: &mut Environment) -> EvalResult {
+        self.value.eval(env)
     }
 }
 
@@ -274,14 +286,14 @@ impl AstNode for IfExpression {
         }
     }
 
-    fn eval(&self) -> EvalResult {
-        let cond = self.condition.eval()?;
+    fn eval(&self, env: &mut Environment) -> EvalResult {
+        let cond = self.condition.eval(env)?;
         match cond {
             Object::BOOLEAN(false) | Object::NULL => match &self.alternative {
-                Some(block) => block.eval(),
+                Some(block) => block.eval(env),
                 _ => Ok(Object::NULL),
             },
-            _ => self.consequense.eval(),
+            _ => self.consequense.eval(env),
         }
     }
 }
@@ -302,8 +314,8 @@ impl AstNode for BlockStatement {
         statemens_to_string(&self.statements)
     }
 
-    fn eval(&self) -> EvalResult {
-        eval_statements(&self.statements)
+    fn eval(&self, env: &mut Environment) -> EvalResult {
+        eval_statements(&self.statements, env)
     }
 }
 
@@ -322,8 +334,8 @@ impl AstNode for PrefixExpression {
         format!("({}{})", self.token, self.right.to_string())
     }
 
-    fn eval(&self) -> EvalResult {
-        let right = self.right.eval()?;
+    fn eval(&self, env: &mut Environment) -> EvalResult {
+        let right = self.right.eval(env)?;
         match self.token {
             Token::BANG => match right {
                 Object::BOOLEAN(f) => Ok(Object::BOOLEAN(!f)),
@@ -360,12 +372,12 @@ impl AstNode for InfixExpression {
         )
     }
 
-    fn eval(&self) -> EvalResult {
-        let left_val = match self.left.eval()? {
+    fn eval(&self, env: &mut Environment) -> EvalResult {
+        let left_val = match self.left.eval(env)? {
             Object::INTEGER(x) => x,
             _ => Err(EvalError::new(format!("expected int for '{}'", self.token)))?,
         };
-        let right_val = match self.right.eval()? {
+        let right_val = match self.right.eval(env)? {
             Object::INTEGER(x) => x,
             _ => Err(EvalError::new(format!("expected int for '{}'", self.token)))?,
         };
@@ -390,10 +402,10 @@ pub struct Program {
     pub statements: Vec<Box<dyn Statement>>,
 }
 
-fn eval_statements(statements: &Vec<Box<dyn Statement>>) -> EvalResult {
+fn eval_statements(statements: &Vec<Box<dyn Statement>>, env: &mut Environment) -> EvalResult {
     let mut ret = Object::NULL;
     for stmt in statements {
-        ret = stmt.eval()?;
+        ret = stmt.eval(env)?;
         if let Object::RERUTN(_) = ret {
             break;
         }
@@ -410,10 +422,10 @@ impl AstNode for Program {
         todo!()
     }
 
-    fn eval(&self) -> EvalResult {
+    fn eval(&self, env: &mut Environment) -> EvalResult {
         let mut ret = Object::NULL;
         for stmt in &self.statements {
-            ret = stmt.eval()?;
+            ret = stmt.eval(env)?;
             if let Object::RERUTN(val) = ret {
                 return Ok(*val);
             }
@@ -424,6 +436,7 @@ impl AstNode for Program {
 
 #[cfg(test)]
 mod test_evaluator {
+    use crate::environment::Environment;
     use crate::parser::Parser;
     use crate::token::Lexer;
 
@@ -478,6 +491,11 @@ mod test_evaluator {
         test_eval_match("if(true){ if(true) { return 10 } return 5 }", "10");
     }
 
+    #[test]
+    fn test_let() {
+        test_eval_match("let x = 10; x", "10");
+    }
+
     fn test_eval_match(input: &str, expected: &str) {
         assert_eq!(test_eval(input).unwrap().inspect(), expected);
     }
@@ -491,6 +509,7 @@ mod test_evaluator {
         }
         let mut parser = Parser::new(tokens);
         let prog = parser.parse_program().unwrap();
-        prog.eval()
+        let mut env = Environment::new();
+        prog.eval(&mut env)
     }
 }

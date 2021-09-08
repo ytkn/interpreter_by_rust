@@ -1,3 +1,4 @@
+#[derive(Clone)]
 pub enum Object {
     INTEGER(i32),
     BOOLEAN(bool),

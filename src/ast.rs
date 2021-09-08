@@ -1,9 +1,16 @@
-use crate::token::Token;
+use crate::{object::Object, token::Token};
 
 #[derive(Debug)]
 pub struct ParseError {
     pub msg: String,
 }
+
+#[derive(Debug)]
+pub struct EvalError {
+    pub msg: String,
+}
+
+type EvalResult = Result<Object, EvalError>;
 
 impl ParseError {
     fn new(msg: String) -> ParseError {
@@ -33,6 +40,7 @@ fn precedence(token: Token) -> i32 {
 pub trait AstNode {
     fn token_literal(&self) -> Token;
     fn to_string(&self) -> String;
+    fn eval(&self) -> EvalResult;
 }
 
 pub trait Statement: AstNode {}
@@ -70,12 +78,25 @@ impl AstNode for Identifier {
             _ => panic!(),
         }
     }
+
+    fn eval(&self) -> EvalResult {
+        todo!()
+    }
 }
 
 impl Expression for Identifier {}
 
-struct IntLiteral {
+pub struct IntLiteral {
     token: Token,
+}
+
+impl IntLiteral {
+    fn value(&self) -> i32 {
+        match self.token {
+            Token::INT(x) => x,
+            _ => panic!(),
+        }
+    }
 }
 
 impl AstNode for IntLiteral {
@@ -88,6 +109,10 @@ impl AstNode for IntLiteral {
             Token::INT(x) => x.to_string(),
             _ => panic!(),
         }
+    }
+
+    fn eval(&self) -> EvalResult {
+        Ok(Object::INTEGER(self.value()))
     }
 }
 
@@ -114,6 +139,10 @@ impl AstNode for FunctionLiteral {
         }(&self.params);
         format!("fn({}){}", params_as_string, self.body.to_string())
     }
+
+    fn eval(&self) -> EvalResult {
+        todo!()
+    }
 }
 
 impl Expression for FunctionLiteral {}
@@ -136,6 +165,10 @@ impl AstNode for FunctionCall {
             expressions_to_string(&self.args, ", ")
         )
     }
+
+    fn eval(&self) -> EvalResult {
+        todo!()
+    }
 }
 
 impl Expression for FunctionCall {}
@@ -153,6 +186,14 @@ impl AstNode for Boolean {
         match self.token {
             Token::TRUE => "true".to_string(),
             Token::FALSE => "false".to_string(),
+            _ => panic!(),
+        }
+    }
+
+    fn eval(&self) -> EvalResult {
+        match self.token {
+            Token::TRUE => Ok(Object::BOOLEAN(true)),
+            Token::FALSE => Ok(Object::BOOLEAN(false)),
             _ => panic!(),
         }
     }
@@ -178,6 +219,10 @@ impl AstNode for LetStatement {
             self.value.to_string()
         )
     }
+
+    fn eval(&self) -> EvalResult {
+        todo!()
+    }
 }
 
 impl Statement for LetStatement {}
@@ -195,13 +240,17 @@ impl AstNode for ReturnStatement {
     fn to_string(&self) -> String {
         format!("return {}", self.return_value.to_string())
     }
+
+    fn eval(&self) -> EvalResult {
+        todo!()
+    }
 }
 
 impl Statement for ReturnStatement {}
 
 struct ExpressionStatement {
     token: Token,
-    return_value: Box<dyn Expression>,
+    value: Box<dyn Expression>,
 }
 
 impl AstNode for ExpressionStatement {
@@ -210,7 +259,11 @@ impl AstNode for ExpressionStatement {
     }
 
     fn to_string(&self) -> String {
-        format!("{}", self.return_value.to_string())
+        format!("{}", self.value.to_string())
+    }
+
+    fn eval(&self) -> EvalResult {
+        self.value.eval()
     }
 }
 
@@ -243,6 +296,10 @@ impl AstNode for IfExpression {
             ),
         }
     }
+
+    fn eval(&self) -> EvalResult {
+        todo!()
+    }
 }
 
 impl Expression for IfExpression {}
@@ -260,6 +317,10 @@ impl AstNode for BlockStatement {
     fn to_string(&self) -> String {
         statemens_to_string(&self.statements)
     }
+
+    fn eval(&self) -> EvalResult {
+        todo!()
+    }
 }
 
 impl Statement for BlockStatement {}
@@ -275,6 +336,10 @@ impl AstNode for PrefixExpression {
     }
     fn to_string(&self) -> String {
         format!("({}{})", self.token, self.right.to_string())
+    }
+
+    fn eval(&self) -> EvalResult {
+        todo!()
     }
 }
 
@@ -298,12 +363,69 @@ impl AstNode for InfixExpression {
             self.right.to_string()
         )
     }
+
+    fn eval(&self) -> EvalResult {
+        todo!()
+    }
 }
 
 impl Expression for InfixExpression {}
 
 pub struct Program {
     pub statements: Vec<Box<dyn Statement>>,
+}
+
+fn eval_statements(statements: &Vec<Box<dyn Statement>>) -> EvalResult {
+    // FIXME: 途中で変なのがあっても無視することになっている。
+    let last = statements.into_iter().map(|stmt| stmt.eval()).last();
+    match last {
+        Some(x) => x,
+        None => Ok(Object::NULL),
+    }
+}
+
+impl AstNode for Program {
+    fn token_literal(&self) -> Token {
+        todo!()
+    }
+
+    fn to_string(&self) -> String {
+        todo!()
+    }
+
+    fn eval(&self) -> EvalResult {
+        eval_statements(&self.statements)
+    }
+}
+
+#[cfg(test)]
+mod test_evaluator {
+    use crate::ast::Parser;
+    use crate::token::Lexer;
+
+    use super::{AstNode, EvalResult};
+    #[test]
+    fn test_eval_int_literal() {
+        assert_eq!("5", test_eval("5").unwrap().inspect());
+        assert_eq!("10", test_eval("10").unwrap().inspect());
+    }
+    #[test]
+    fn test_eval_bool_literal() {
+        assert_eq!("true", test_eval("true").unwrap().inspect());
+        assert_eq!("false", test_eval("false").unwrap().inspect());
+    }
+
+    fn test_eval(input: &str) -> EvalResult {
+        let mut lexer = Lexer::new(input);
+        let mut tokens = Vec::new();
+        while !lexer.at_eof() {
+            let tok = lexer.next_token();
+            tokens.push(tok);
+        }
+        let mut parser = Parser::new(tokens);
+        let prog = parser.parse_program().unwrap();
+        prog.eval()
+    }
 }
 
 pub struct Parser {
@@ -465,7 +587,7 @@ impl Parser {
         let token = self.cur_token();
         let stmt = ExpressionStatement {
             token,
-            return_value: self.parse_expression(LOWEST)?,
+            value: self.parse_expression(LOWEST)?,
         };
         if self.cur_token() == Token::SEMICOLON {
             self.next();
@@ -620,7 +742,7 @@ impl Parser {
 }
 
 #[cfg(test)]
-mod test {
+mod test_parser {
     use crate::ast::Parser;
     use crate::token::Lexer;
 

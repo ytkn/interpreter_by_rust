@@ -304,7 +304,14 @@ impl AstNode for IfExpression {
     }
 
     fn eval(&self) -> EvalResult {
-        todo!()
+        let cond = self.condition.eval()?;
+        match cond {
+            Object::BOOLEAN(false) | Object::NULL => match &self.alternative {
+                Some(block) => block.eval(),
+                _ => Ok(Object::NULL),
+            },
+            _ => self.consequense.eval(),
+        }
     }
 }
 
@@ -325,7 +332,7 @@ impl AstNode for BlockStatement {
     }
 
     fn eval(&self) -> EvalResult {
-        todo!()
+        eval_statements(&self.statements)
     }
 }
 
@@ -454,13 +461,15 @@ mod test_evaluator {
 
     #[test]
     fn test_eval_infix_operator() {
-        assert_eq!("10", test_eval("5+5").unwrap().inspect());
-        assert_eq!("109", test_eval("10*10+9").unwrap().inspect());
-        assert_eq!("100", test_eval("10+10*9").unwrap().inspect());
-        assert_eq!("false", test_eval("10 > 10*9").unwrap().inspect());
-        assert_eq!("true", test_eval("10 < 10*9").unwrap().inspect());
-        assert_eq!("true", test_eval("100 == 10+10*9").unwrap().inspect());
-        assert_eq!("false", test_eval("100 != 10+10*9").unwrap().inspect());
+        test_eval_match("5+5", "10");
+        test_eval_match("5+5", "10");
+        test_eval_match("10*10+9", "109");
+        test_eval_match("10+10*9", "100");
+        test_eval_match("10 > 10*9", "false");
+        test_eval_match("10 < 10*9", "true");
+        test_eval_match("100 == 10+10*9", "true");
+        test_eval_match("100 != 10+10*9", "false");
+        test_eval_match("180 != (10+10)*9", "false");
     }
 
     #[test]
@@ -472,6 +481,19 @@ mod test_evaluator {
         assert_eq!("false", test_eval("!!false").unwrap().inspect());
         assert_eq!("-5", test_eval("-5").unwrap().inspect());
         assert_eq!("-10", test_eval("-10").unwrap().inspect());
+    }
+
+    #[test]
+    fn test_if_else() {
+        test_eval_match("if(true){ 10 }", "10");
+        test_eval_match("if(true){ 10 } else { 20 }", "10");
+        test_eval_match("if(false){ 10 } else { 20 }", "20");
+        test_eval_match("if(1*10 == 20){ 10 } else { 20 }", "20");
+        test_eval_match("if(1+10/10 == 2){ 10 } else { 20 }", "10");
+    }
+
+    fn test_eval_match(input: &str, expected: &str) {
+        assert_eq!(test_eval(input).unwrap().inspect(), expected);
     }
 
     fn test_eval(input: &str) -> EvalResult {
@@ -514,10 +536,6 @@ impl Parser {
 
     fn cur_precedence(&self) -> i32 {
         precedence(self.cur_token())
-    }
-
-    fn peek_precedence(&self) -> i32 {
-        precedence(self.peek_token())
     }
 
     fn next(&mut self) {

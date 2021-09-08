@@ -1,7 +1,8 @@
-use interpreter::{ast::Parser, token::Lexer};
+use interpreter::{ast::Parser, environment::Environment, token::Lexer};
 use std::io::Write;
 
 fn main() {
+    let mut env = Environment::new();
     loop {
         print!(">> ");
         std::io::stdout().flush().unwrap();
@@ -20,7 +21,7 @@ fn main() {
             Ok(prog) => prog.statements.into_iter().for_each(|stmt| {
                 println!(
                     "{:?}",
-                    match stmt.eval() {
+                    match stmt.eval(&mut env) {
                         Ok(obj) => obj.inspect(),
                         Err(err) => err.msg,
                     }

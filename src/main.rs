@@ -1,4 +1,4 @@
-use interpreter::{ast::Parser, token::Lexer};
+use interpreter::{parser::Parser, token::Lexer};
 use std::io::Write;
 
 fn main() {

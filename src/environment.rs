@@ -16,6 +16,6 @@ impl Environment {
         self.store.get(name).map(|x| x.clone())
     }
     pub fn set(&mut self, name: String, value: Object) {
-        self.store.insert(name, value);//.unwrap();
+        self.store.insert(name, value);
     }
 }

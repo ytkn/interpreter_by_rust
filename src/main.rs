@@ -7,10 +7,6 @@ fn main() {
         std::io::stdout().flush().unwrap();
         let mut s = String::new();
         std::io::stdin().read_line(&mut s).unwrap();
-        if s.starts_with('q') {
-            println!("bye!");
-            break;
-        }
         let input = s.as_str();
         let mut lexer = Lexer::new(input);
         let mut tokens = Vec::new();
@@ -19,9 +15,13 @@ fn main() {
             tokens.push(tok);
         }
         let mut parser = Parser::new(tokens);
-        let prog = parser.parse_program();
-        for stmt in prog.statements {
-            println!("{}", stmt.to_string())
+        let result = parser.parse_program();
+        match result {
+            Ok(prog) => prog
+                .statements
+                .into_iter()
+                .for_each(|stmt| println!("{}", stmt.to_string())),
+            Err(err) => println!("{}", err.msg),
         }
     }
 }

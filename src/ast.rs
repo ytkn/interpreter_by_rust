@@ -262,6 +262,27 @@ impl AstNode for Boolean {
 
 impl Expression for Boolean {}
 
+pub struct ArrayLiteral {
+    pub token: Token, // [
+    pub elements: Vec<Rc<dyn Expression>>,
+}
+
+impl AstNode for ArrayLiteral {
+    fn token_literal(&self) -> Token {
+        self.token.clone()
+    }
+
+    fn to_string(&self) -> String {
+        format!("[{}]", expressions_to_string(&self.elements, ", "))
+    }
+
+    fn eval(&self, _env: &mut Environment) -> EvalResult {
+        todo!()
+    }
+}
+
+impl Expression for ArrayLiteral {}
+
 pub struct LetStatement {
     pub token: Token,
     pub ident: Identifier,

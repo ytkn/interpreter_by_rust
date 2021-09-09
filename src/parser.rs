@@ -214,6 +214,7 @@ impl Parser {
             Token::INT(_) => self.parse_int_literal()?,
             Token::STRING(_) => self.parse_string_literal()?,
             Token::TRUE | Token::FALSE => self.parse_boolean()?,
+            Token::LBRACKET => self.parse_array_literal()?,
             Token::BANG | Token::MINUS => self.parse_prefix_expression()?,
             Token::LPAREN => self.parse_grouped_expression()?,
             Token::IF => self.parse_if_expression()?,
@@ -283,7 +284,7 @@ impl Parser {
         &mut self,
         function: Rc<dyn Expression>,
     ) -> Result<Rc<FunctionCall>, ParseError> {
-        let args = self.parse_call_args()?;
+        let args = self.parse_expression_list(Token::LPAREN, Token::RPAREN)?;
         Ok(Rc::new({
             FunctionCall {
                 token: Token::LPAREN,
@@ -293,17 +294,21 @@ impl Parser {
         }))
     }
 
-    fn parse_call_args(&mut self) -> Result<Vec<Rc<dyn Expression>>, ParseError> {
-        self.expect_token(Token::LPAREN)?;
+    fn parse_expression_list(
+        &mut self,
+        start_token: Token,
+        end_token: Token,
+    ) -> Result<Vec<Rc<dyn Expression>>, ParseError> {
+        self.expect_token(start_token)?;
         let mut params = Vec::new();
-        while self.cur_token() != Token::RPAREN {
+        while self.cur_token() != end_token {
             params.push(self.parse_expression(LOWEST)?);
             if self.cur_token() != Token::COMMA {
                 break;
             }
             self.expect_token(Token::COMMA)?;
         }
-        self.expect_token(Token::RPAREN)?;
+        self.expect_token(end_token)?;
         Ok(params)
     }
 
@@ -351,6 +356,13 @@ impl Parser {
     fn parse_boolean(&mut self) -> Result<Rc<Boolean>, ParseError> {
         let token = self.expect_bool()?;
         Ok(Rc::new(Boolean { token }))
+    }
+
+    fn parse_array_literal(&mut self) -> Result<Rc<dyn Expression>, ParseError> {
+        Ok(Rc::new(ArrayLiteral {
+            token: Token::LBRACKET,
+            elements: self.parse_expression_list(Token::LBRACKET, Token::RBRACKET)?,
+        }))
     }
 
     fn parse_ident(&mut self) -> Result<Rc<Identifier>, ParseError> {
@@ -420,6 +432,17 @@ mod test_parser {
             ("\"hello\"", "hello"),
             ("\"hello world\"", "hello world"),
             ("\"hello\"+\"world\"", "(hello + world)"),
+        ];
+        for (input, expected) in test_cases {
+            test_match(input, expected)
+        }
+    }
+
+    #[test]
+    fn test_array_literal() {
+        let test_cases = [
+            ("[1, 2, 3]", "[1, 2, 3]"),
+            ("[1, a, add(1, 2)]", "[1, a, add(1, 2)]"),
         ];
         for (input, expected) in test_cases {
             test_match(input, expected)

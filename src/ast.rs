@@ -437,6 +437,44 @@ pub struct InfixExpression {
     pub right: Rc<dyn Expression>,
 }
 
+impl InfixExpression {
+    fn eval_left_int(&self, left_val: i32, env: &mut Environment) -> EvalResult {
+        let right_val = match self.right.eval(env)? {
+            Object::INTEGER(x) => x,
+            _ => Err(EvalError::new(format!("expected int for '{}'", self.token)))?,
+        };
+        match self.token {
+            Token::ASTERISK => Ok(Object::INTEGER(left_val * right_val)),
+            Token::SLASH => Ok(Object::INTEGER(left_val / right_val)),
+            Token::PLUS => Ok(Object::INTEGER(left_val + right_val)),
+            Token::MINUS => Ok(Object::INTEGER(left_val - right_val)),
+            Token::LT => Ok(Object::BOOLEAN(left_val < right_val)),
+            Token::GT => Ok(Object::BOOLEAN(left_val > right_val)),
+            Token::EQ => Ok(Object::BOOLEAN(left_val == right_val)),
+            Token::NE => Ok(Object::BOOLEAN(left_val != right_val)),
+            _ => unreachable!(),
+        }
+    }
+    fn eval_left_string(&self, left_val: String, env: &mut Environment) -> EvalResult {
+        let right_val = match self.right.eval(env)? {
+            Object::STRING(x) => x,
+            _ => Err(EvalError::new(format!("expected int for '{}'", self.token)))?,
+        };
+        match self.token {
+            Token::PLUS => Ok(Object::STRING(format!("{}{}", left_val, right_val))),
+            Token::LT => Ok(Object::BOOLEAN(left_val < right_val)),
+            Token::GT => Ok(Object::BOOLEAN(left_val > right_val)),
+            Token::EQ => Ok(Object::BOOLEAN(left_val == right_val)),
+            Token::NE => Ok(Object::BOOLEAN(left_val != right_val)),
+            Token::ASTERISK | Token::SLASH | Token::MINUS => Err(EvalError::new(format!(
+                "'{}' is not defined for string",
+                self.token
+            )))?,
+            _ => unreachable!(),
+        }
+    }
+}
+
 impl AstNode for InfixExpression {
     fn token_literal(&self) -> Token {
         self.token.clone()
@@ -452,41 +490,8 @@ impl AstNode for InfixExpression {
 
     fn eval(&self, env: &mut Environment) -> EvalResult {
         match self.left.eval(env)? {
-            Object::INTEGER(left_val) => {
-                let right_val = match self.right.eval(env)? {
-                    Object::INTEGER(x) => x,
-                    _ => Err(EvalError::new(format!("expected int for '{}'", self.token)))?,
-                };
-                match self.token {
-                    Token::ASTERISK => Ok(Object::INTEGER(left_val * right_val)),
-                    Token::SLASH => Ok(Object::INTEGER(left_val / right_val)),
-                    Token::PLUS => Ok(Object::INTEGER(left_val + right_val)),
-                    Token::MINUS => Ok(Object::INTEGER(left_val - right_val)),
-                    Token::LT => Ok(Object::BOOLEAN(left_val < right_val)),
-                    Token::GT => Ok(Object::BOOLEAN(left_val > right_val)),
-                    Token::EQ => Ok(Object::BOOLEAN(left_val == right_val)),
-                    Token::NE => Ok(Object::BOOLEAN(left_val != right_val)),
-                    _ => unreachable!(),
-                }
-            }
-            Object::STRING(left_val) => {
-                let right_val = match self.right.eval(env)? {
-                    Object::STRING(x) => x,
-                    _ => Err(EvalError::new(format!("expected int for '{}'", self.token)))?,
-                };
-                match self.token {
-                    Token::PLUS => Ok(Object::STRING(format!("{}{}", left_val, right_val))),
-                    Token::LT => Ok(Object::BOOLEAN(left_val < right_val)),
-                    Token::GT => Ok(Object::BOOLEAN(left_val > right_val)),
-                    Token::EQ => Ok(Object::BOOLEAN(left_val == right_val)),
-                    Token::NE => Ok(Object::BOOLEAN(left_val != right_val)),
-                    Token::ASTERISK | Token::SLASH | Token::MINUS => Err(EvalError::new(format!(
-                        "'{}' is not defined for string",
-                        self.token
-                    )))?,
-                    _ => unreachable!(),
-                }
-            }
+            Object::INTEGER(left_val) => self.eval_left_int(left_val, env),
+            Object::STRING(left_val) => self.eval_left_string(left_val, env),
             _ => Err(EvalError::new(format!("expected int for '{}'", self.token))),
         }
     }

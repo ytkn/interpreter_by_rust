@@ -556,7 +556,9 @@ mod test_evaluator {
         test_eval_match("10 < 10*9", "true");
         test_eval_match("100 == 10+10*9", "true");
         test_eval_match("100 != 10+10*9", "false");
-        test_eval_match("180 != (10+10)*9", "false");
+        test_eval_match("\"hello \" + \"world\"", "hello world");
+        test_eval_match("\"hello\" == \"hello\"", "true");
+        test_eval_match("\"hello\" == \"world\"", "false");
         test_is_err("5+true");
         test_is_err("true+false");
     }

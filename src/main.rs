@@ -1,4 +1,5 @@
-use interpreter::{ast::Parser, environment::Environment, token::Lexer};
+use interpreter::environment::Environment;
+use interpreter::{parser::Parser, token::Lexer};
 use std::io::Write;
 
 fn main() {
@@ -8,6 +9,14 @@ fn main() {
         std::io::stdout().flush().unwrap();
         let mut s = String::new();
         std::io::stdin().read_line(&mut s).unwrap();
+        if s.eq("quit()\n") {
+            println!("bye!");
+            break;
+        }
+        if s.eq("values()\n") {
+            println!("{}", env.inspect());
+            continue;
+        }
         let input = s.as_str();
         let mut lexer = Lexer::new(input);
         let mut tokens = Vec::new();

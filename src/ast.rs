@@ -103,6 +103,29 @@ impl AstNode for IntLiteral {
 
 impl Expression for IntLiteral {}
 
+pub struct StringLiteral {
+    pub token: Token,
+}
+
+impl AstNode for StringLiteral {
+    fn token_literal(&self) -> Token {
+        self.token.clone()
+    }
+
+    fn to_string(&self) -> String {
+        match &self.token {
+            Token::STRING(x) => x.to_string(),
+            _ => panic!(),
+        }
+    }
+
+    fn eval(&self, _env: &mut Environment) -> EvalResult {
+        todo!()
+    }
+}
+
+impl Expression for StringLiteral {}
+
 pub struct FunctionLiteral {
     pub token: Token,
     pub params: Vec<Rc<Identifier>>,

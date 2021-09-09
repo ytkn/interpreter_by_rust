@@ -86,6 +86,7 @@ impl Parser {
         let ret = match token {
             Token::IDENT(_) => panic!("ident should be verified by expect_ident()"),
             Token::INT(_) => panic!("ident should be verified by expect_int()"),
+            Token::STRING(_) => panic!("ident should be verified by expect_string()"),
             _ => {
                 if self.cur_token() != token {
                     Err(ParseError::new(format!(
@@ -108,6 +109,18 @@ impl Parser {
             Token::IDENT(name) => Ok(Token::IDENT(name)),
             _ => Err(ParseError::new(format!(
                 "expected ident at {} th token",
+                self.pos
+            ))),
+        };
+        self.next();
+        ret
+    }
+
+    fn expect_string(&mut self) -> Result<Token, ParseError> {
+        let ret = match self.cur_token() {
+            Token::STRING(value) => Ok(Token::STRING(value)),
+            _ => Err(ParseError::new(format!(
+                "expected int at {} th token",
                 self.pos
             ))),
         };
@@ -199,6 +212,7 @@ impl Parser {
         let mut left = match self.cur_token() {
             Token::IDENT(_) => self.parse_ident()?,
             Token::INT(_) => self.parse_int_literal()?,
+            Token::STRING(_) => self.parse_string_literal()?,
             Token::TRUE | Token::FALSE => self.parse_boolean()?,
             Token::BANG | Token::MINUS => self.parse_prefix_expression()?,
             Token::LPAREN => self.parse_grouped_expression()?,
@@ -330,6 +344,10 @@ impl Parser {
         Ok(Rc::new(IntLiteral { token }))
     }
 
+    fn parse_string_literal(&mut self) -> Result<Rc<dyn Expression>, ParseError> {
+        let token = self.expect_string()?;
+        Ok(Rc::new(StringLiteral { token }))
+    }
     fn parse_boolean(&mut self) -> Result<Rc<Boolean>, ParseError> {
         let token = self.expect_bool()?;
         Ok(Rc::new(Boolean { token }))
@@ -365,17 +383,8 @@ mod test_parser {
             ("(a+b)*c", "((a + b) * c)"),
             ("-(5+5)", "(-(5 + 5))"),
         ];
-        for (input, exptexced) in test_cases {
-            let mut lexer = Lexer::new(input);
-            let mut tokens = Vec::new();
-            while !lexer.at_eof() {
-                let tok = lexer.next_token();
-                tokens.push(tok);
-            }
-            let mut parser = Parser::new(tokens);
-            let prog = parser.parse_program().unwrap();
-            assert_eq!(prog.statements.len(), 1);
-            assert_eq!(prog.statements[0].to_string(), exptexced);
+        for (input, expected) in test_cases {
+            test_match(input, expected)
         }
     }
     #[test]
@@ -388,16 +397,8 @@ mod test_parser {
             }",
             "if(x < y) (y - x) else (x - y)",
         )];
-        for (input, exptexced) in test_cases {
-            let mut lexer = Lexer::new(input);
-            let mut tokens = Vec::new();
-            while !lexer.at_eof() {
-                let tok = lexer.next_token();
-                tokens.push(tok);
-            }
-            let mut parser = Parser::new(tokens);
-            let prog = parser.parse_program().unwrap();
-            assert_eq!(prog.statements[0].to_string(), exptexced);
+        for (input, expected) in test_cases {
+            test_match(input, expected)
         }
     }
 
@@ -408,16 +409,16 @@ mod test_parser {
             ("fn(x){ x; }", "fn(x)x"),
             ("fn(x, y){ x+y; }", "fn(x, y)(x + y)"),
         ];
-        for (input, exptexced) in test_cases {
-            let mut lexer = Lexer::new(input);
-            let mut tokens = Vec::new();
-            while !lexer.at_eof() {
-                let tok = lexer.next_token();
-                tokens.push(tok);
-            }
-            let mut parser = Parser::new(tokens);
-            let prog = parser.parse_program().unwrap();
-            assert_eq!(prog.statements[0].to_string(), exptexced);
+        for (input, expected) in test_cases {
+            test_match(input, expected)
+        }
+    }
+
+    #[test]
+    fn test_string_literal() {
+        let test_cases = [("\"hello\"", "hello"), ("\"hello world\"", "hello world")];
+        for (input, expected) in test_cases {
+            test_match(input, expected)
         }
     }
 
@@ -427,16 +428,20 @@ mod test_parser {
             ("add(a, b, c)", "add(a, b, c)"),
             ("fn(x, y){ x+y; }(1, 2)", "fn(x, y)(x + y)(1, 2)"),
         ];
-        for (input, exptexced) in test_cases {
-            let mut lexer = Lexer::new(input);
-            let mut tokens = Vec::new();
-            while !lexer.at_eof() {
-                let tok = lexer.next_token();
-                tokens.push(tok);
-            }
-            let mut parser = Parser::new(tokens);
-            let prog = parser.parse_program().unwrap();
-            assert_eq!(prog.statements[0].to_string(), exptexced);
+        for (input, expected) in test_cases {
+            test_match(input, expected)
         }
+    }
+
+    fn test_match(input: &str, expected: &str) {
+        let mut lexer = Lexer::new(input);
+        let mut tokens = Vec::new();
+        while !lexer.at_eof() {
+            let tok = lexer.next_token();
+            tokens.push(tok);
+        }
+        let mut parser = Parser::new(tokens);
+        let prog = parser.parse_program().unwrap();
+        assert_eq!(prog.statements[0].to_string(), expected);
     }
 }

@@ -1,6 +1,10 @@
 use std::rc::Rc;
 
-use crate::{environment::Environment, object::Object, token::Token};
+use crate::{
+    environment::Environment,
+    object::{get_builtin, Object},
+    token::Token,
+};
 
 #[derive(Debug)]
 pub struct EvalError {
@@ -8,7 +12,7 @@ pub struct EvalError {
 }
 
 impl EvalError {
-    fn new(msg: String) -> EvalError {
+    pub fn new(msg: String) -> EvalError {
         EvalError { msg }
     }
 }
@@ -62,9 +66,12 @@ impl AstNode for Identifier {
             Token::IDENT(name) => name,
             _ => unreachable!(),
         };
-        match env.get(name) {
-            Some(x) => Ok(x),
-            None => Err(EvalError::new(format!("{} not found", name))),
+        match get_builtin(name) {
+            Some(builtin) => Ok(builtin),
+            None => match env.get(name) {
+                Some(x) => Ok(x),
+                None => Err(EvalError::new(format!("{} not found", name))),
+            },
         }
     }
 }
@@ -219,6 +226,7 @@ impl AstNode for FunctionCall {
                     Ok(unwrap_return_value(body.eval(&mut func_env)?))
                 }
             }
+            Object::BUILTIN(builtin) => builtin(args),
             _ => Err(EvalError::new("not callable".to_string())),
         }
     }
@@ -603,6 +611,13 @@ mod test_evaluator {
     fn test_return() {
         test_eval_match("if(true){ return 10 }", "10");
         test_eval_match("if(true){ if(true) { return 10 } return 5 }", "10");
+    }
+
+    #[test]
+    fn test_builtin() {
+        test_eval_match("len(\"hello\")", "5");
+        test_eval_match("len(\"hello\" + \" world\")", "11");
+        test_is_err("len(1)");
     }
 
     #[test]

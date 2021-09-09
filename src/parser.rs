@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::{ast::*, token::Token};
 
 #[derive(Debug)]
@@ -64,14 +66,14 @@ impl Parser {
     }
 
     pub fn parse_program(&mut self) -> Result<Program, ParseError> {
-        let mut statements: Vec<Box<dyn Statement>> = Vec::new();
+        let mut statements: Vec<Rc<dyn Statement>> = Vec::new();
         while self.cur_token() != Token::EOF {
             statements.push(self.parse_statement()?);
         }
         Ok(Program { statements })
     }
 
-    fn parse_statement(&mut self) -> Result<Box<dyn Statement>, ParseError> {
+    fn parse_statement(&mut self) -> Result<Rc<dyn Statement>, ParseError> {
         let stmt = match self.cur_token() {
             Token::LET => self.parse_let_statement()?,
             Token::RETURN => self.parse_return_statement()?,
@@ -137,7 +139,7 @@ impl Parser {
         Ok(token)
     }
 
-    fn parse_let_statement(&mut self) -> Result<Box<dyn Statement>, ParseError> {
+    fn parse_let_statement(&mut self) -> Result<Rc<dyn Statement>, ParseError> {
         self.expect_token(Token::LET)?;
         let ident = Identifier {
             token: self.expect_ident()?,
@@ -151,29 +153,29 @@ impl Parser {
         if self.cur_token() == Token::SEMICOLON {
             self.next();
         }
-        Ok(Box::new(stmt))
+        Ok(Rc::new(stmt))
     }
 
-    fn parse_block_statement(&mut self) -> Result<Box<BlockStatement>, ParseError> {
+    fn parse_block_statement(&mut self) -> Result<Rc<BlockStatement>, ParseError> {
         let mut statements = Vec::new();
         self.expect_token(Token::LBRACE)?;
         while self.cur_token() != Token::EOF && self.cur_token() != Token::RBRACE {
             statements.push(self.parse_statement()?)
         }
         self.expect_token(Token::RBRACE)?;
-        Ok(Box::new(BlockStatement {
+        Ok(Rc::new(BlockStatement {
             token: Token::LBRACE,
             statements,
         }))
     }
 
-    fn parse_return_statement(&mut self) -> Result<Box<ReturnStatement>, ParseError> {
+    fn parse_return_statement(&mut self) -> Result<Rc<ReturnStatement>, ParseError> {
         self.expect_token(Token::RETURN)?;
         let return_value = self.parse_expression(LOWEST)?;
         if self.cur_token() == Token::SEMICOLON {
             self.next();
         }
-        Ok(Box::new({
+        Ok(Rc::new({
             ReturnStatement {
                 token: Token::RETURN,
                 return_value,
@@ -181,7 +183,7 @@ impl Parser {
         }))
     }
 
-    fn parse_expression_statement(&mut self) -> Result<Box<dyn Statement>, ParseError> {
+    fn parse_expression_statement(&mut self) -> Result<Rc<dyn Statement>, ParseError> {
         let token = self.cur_token();
         let stmt = ExpressionStatement {
             token,
@@ -190,10 +192,10 @@ impl Parser {
         if self.cur_token() == Token::SEMICOLON {
             self.next();
         }
-        Ok(Box::new(stmt))
+        Ok(Rc::new(stmt))
     }
 
-    fn parse_expression(&mut self, precedence: i32) -> Result<Box<dyn Expression>, ParseError> {
+    fn parse_expression(&mut self, precedence: i32) -> Result<Rc<dyn Expression>, ParseError> {
         let mut left = match self.cur_token() {
             Token::IDENT(_) => self.parse_ident()?,
             Token::INT(_) => self.parse_int_literal()?,
@@ -225,14 +227,14 @@ impl Parser {
         Ok(left)
     }
 
-    fn parse_prefix_expression(&mut self) -> Result<Box<dyn Expression>, ParseError> {
+    fn parse_prefix_expression(&mut self) -> Result<Rc<dyn Expression>, ParseError> {
         let token = self.cur_token();
         self.next();
         let right = self.parse_expression(PREFIX)?;
-        Ok(Box::new(PrefixExpression { token, right }))
+        Ok(Rc::new(PrefixExpression { token, right }))
     }
 
-    fn parse_if_expression(&mut self) -> Result<Box<dyn Expression>, ParseError> {
+    fn parse_if_expression(&mut self) -> Result<Rc<dyn Expression>, ParseError> {
         self.expect_token(Token::IF)?;
         self.expect_token(Token::LPAREN)?;
         let condition = self.parse_expression(LOWEST)?;
@@ -245,7 +247,7 @@ impl Parser {
             }
             _ => None,
         };
-        Ok(Box::new(IfExpression {
+        Ok(Rc::new(IfExpression {
             token: Token::IF,
             condition,
             consequense,
@@ -255,20 +257,20 @@ impl Parser {
 
     fn parse_infix_expression(
         &mut self,
-        left: Box<dyn Expression>,
-    ) -> Result<Box<dyn Expression>, ParseError> {
+        left: Rc<dyn Expression>,
+    ) -> Result<Rc<dyn Expression>, ParseError> {
         let token = self.cur_token();
         self.next();
         let right = self.parse_expression(precedence(token.clone()))?;
-        Ok(Box::new(InfixExpression { token, left, right }))
+        Ok(Rc::new(InfixExpression { token, left, right }))
     }
 
     fn parse_function_call(
         &mut self,
-        function: Box<dyn Expression>,
-    ) -> Result<Box<FunctionCall>, ParseError> {
+        function: Rc<dyn Expression>,
+    ) -> Result<Rc<FunctionCall>, ParseError> {
         let args = self.parse_call_args()?;
-        Ok(Box::new({
+        Ok(Rc::new({
             FunctionCall {
                 token: Token::LPAREN,
                 function,
@@ -277,7 +279,7 @@ impl Parser {
         }))
     }
 
-    fn parse_call_args(&mut self) -> Result<Vec<Box<dyn Expression>>, ParseError> {
+    fn parse_call_args(&mut self) -> Result<Vec<Rc<dyn Expression>>, ParseError> {
         self.expect_token(Token::LPAREN)?;
         let mut params = Vec::new();
         while self.cur_token() != Token::RPAREN {
@@ -291,18 +293,18 @@ impl Parser {
         Ok(params)
     }
 
-    fn parse_function_literal(&mut self) -> Result<Box<FunctionLiteral>, ParseError> {
+    fn parse_function_literal(&mut self) -> Result<Rc<FunctionLiteral>, ParseError> {
         self.expect_token(Token::FUNCTION)?;
         let params = self.parse_function_params()?;
         let body = self.parse_block_statement()?;
-        Ok(Box::new(FunctionLiteral {
+        Ok(Rc::new(FunctionLiteral {
             token: Token::FUNCTION,
             params,
             body,
         }))
     }
 
-    fn parse_function_params(&mut self) -> Result<Vec<Box<Identifier>>, ParseError> {
+    fn parse_function_params(&mut self) -> Result<Vec<Rc<Identifier>>, ParseError> {
         self.expect_token(Token::LPAREN)?;
         let mut params = Vec::new();
         while self.cur_token() != Token::RPAREN {
@@ -316,26 +318,26 @@ impl Parser {
         Ok(params)
     }
 
-    fn parse_grouped_expression(&mut self) -> Result<Box<dyn Expression>, ParseError> {
+    fn parse_grouped_expression(&mut self) -> Result<Rc<dyn Expression>, ParseError> {
         self.expect_token(Token::LPAREN)?;
         let expression = self.parse_expression(LOWEST)?;
         self.expect_token(Token::RPAREN)?;
         Ok(expression)
     }
 
-    fn parse_int_literal(&mut self) -> Result<Box<dyn Expression>, ParseError> {
+    fn parse_int_literal(&mut self) -> Result<Rc<dyn Expression>, ParseError> {
         let token = self.expect_int()?;
-        Ok(Box::new(IntLiteral { token }))
+        Ok(Rc::new(IntLiteral { token }))
     }
 
-    fn parse_boolean(&mut self) -> Result<Box<Boolean>, ParseError> {
+    fn parse_boolean(&mut self) -> Result<Rc<Boolean>, ParseError> {
         let token = self.expect_bool()?;
-        Ok(Box::new(Boolean { token }))
+        Ok(Rc::new(Boolean { token }))
     }
 
-    fn parse_ident(&mut self) -> Result<Box<Identifier>, ParseError> {
+    fn parse_ident(&mut self) -> Result<Rc<Identifier>, ParseError> {
         let token = self.expect_ident()?;
-        Ok(Box::new(Identifier { token }))
+        Ok(Rc::new(Identifier { token }))
     }
 }
 

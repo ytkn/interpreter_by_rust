@@ -1,3 +1,5 @@
+use std::{iter::Zip, rc::Rc};
+
 use crate::{environment::Environment, object::Object, token::Token};
 
 #[derive(Debug)]
@@ -23,7 +25,7 @@ pub trait Statement: AstNode {}
 
 pub trait Expression: AstNode {}
 
-fn statemens_to_string(statements: &Vec<Box<dyn Statement>>) -> String {
+fn statemens_to_string(statements: &Vec<Rc<dyn Statement>>) -> String {
     statements
         .into_iter()
         .map(|stmt| stmt.to_string())
@@ -31,7 +33,7 @@ fn statemens_to_string(statements: &Vec<Box<dyn Statement>>) -> String {
         .join("")
 }
 
-fn expressions_to_string(statements: &Vec<Box<dyn Expression>>, sep: &str) -> String {
+fn expressions_to_string(statements: &Vec<Rc<dyn Expression>>, sep: &str) -> String {
     statements
         .into_iter()
         .map(|stmt| stmt.to_string())
@@ -103,8 +105,8 @@ impl Expression for IntLiteral {}
 
 pub struct FunctionLiteral {
     pub token: Token,
-    pub params: Vec<Box<Identifier>>,
-    pub body: Box<BlockStatement>,
+    pub params: Vec<Rc<Identifier>>,
+    pub body: Rc<BlockStatement>,
 }
 
 impl AstNode for FunctionLiteral {
@@ -113,7 +115,7 @@ impl AstNode for FunctionLiteral {
     }
 
     fn to_string(&self) -> String {
-        let params_as_string = |params: &Vec<Box<Identifier>>| -> String {
+        let params_as_string = |params: &Vec<Rc<Identifier>>| -> String {
             params
                 .into_iter()
                 .map(|p| p.to_string())
@@ -124,7 +126,7 @@ impl AstNode for FunctionLiteral {
     }
 
     fn eval(&self, _env: &mut Environment) -> EvalResult {
-        todo!()
+        Ok(Object::FUNCTION(self.params.clone(), self.body.clone()))
     }
 }
 
@@ -132,8 +134,26 @@ impl Expression for FunctionLiteral {}
 
 pub struct FunctionCall {
     pub token: Token,
-    pub function: Box<dyn Expression>,
-    pub args: Vec<Box<dyn Expression>>,
+    pub function: Rc<dyn Expression>,
+    pub args: Vec<Rc<dyn Expression>>,
+}
+
+fn eval_expressions(
+    expressions: &Vec<Rc<dyn Expression>>,
+    env: &mut Environment,
+) -> Result<Vec<Object>, EvalError> {
+    let mut result = Vec::new();
+    for exp in expressions {
+        result.push(exp.eval(env)?)
+    }
+    Ok(result)
+}
+
+fn unwrap_return_value(obj: Object) -> Object {
+    match obj {
+        Object::RERUTN(x) => (*x).clone(),
+        x => x,
+    }
 }
 
 impl AstNode for FunctionCall {
@@ -149,8 +169,33 @@ impl AstNode for FunctionCall {
         )
     }
 
-    fn eval(&self, _env: &mut Environment) -> EvalResult {
-        todo!()
+    fn eval(&self, env: &mut Environment) -> EvalResult {
+        let func = self.function.eval(env)?;
+        let args = eval_expressions(&self.args, env)?;
+        if let Object::FUNCTION(params, body) = func {
+            if args.len() != params.len() {
+                return Err(EvalError::new(format!(
+                    "expected {} args but got {} args",
+                    params.len(),
+                    args.len(),
+                )));
+            }
+            let mut func_env = Environment::new();
+            params
+                .into_iter()
+                .zip(args.into_iter())
+                .for_each(|(ident, value)| {
+                    if let Token::IDENT(name) = &ident.token {
+                        func_env.set(name.clone(), value);
+                    } else {
+                        unreachable!()
+                    }
+                });
+            let result = body.eval(&mut func_env)?;
+            return Ok(unwrap_return_value(result))
+        } else {
+            return Err(EvalError::new("not callable".to_string()));
+        }
     }
 }
 
@@ -187,7 +232,7 @@ impl Expression for Boolean {}
 pub struct LetStatement {
     pub token: Token,
     pub ident: Identifier,
-    pub value: Box<dyn Expression>,
+    pub value: Rc<dyn Expression>,
 }
 
 impl AstNode for LetStatement {
@@ -217,7 +262,7 @@ impl Statement for LetStatement {}
 
 pub struct ReturnStatement {
     pub token: Token,
-    pub return_value: Box<dyn Expression>,
+    pub return_value: Rc<dyn Expression>,
 }
 
 impl AstNode for ReturnStatement {
@@ -231,7 +276,7 @@ impl AstNode for ReturnStatement {
 
     fn eval(&self, env: &mut Environment) -> EvalResult {
         let ret = self.return_value.eval(env)?;
-        Ok(Object::RERUTN(Box::new(ret)))
+        Ok(Object::RERUTN(Rc::new(ret)))
     }
 }
 
@@ -239,7 +284,7 @@ impl Statement for ReturnStatement {}
 
 pub struct ExpressionStatement {
     pub token: Token,
-    pub value: Box<dyn Expression>,
+    pub value: Rc<dyn Expression>,
 }
 
 impl AstNode for ExpressionStatement {
@@ -260,9 +305,9 @@ impl Statement for ExpressionStatement {}
 
 pub struct IfExpression {
     pub token: Token,
-    pub condition: Box<dyn Expression>,
-    pub consequense: Box<BlockStatement>,
-    pub alternative: Option<Box<BlockStatement>>,
+    pub condition: Rc<dyn Expression>,
+    pub consequense: Rc<BlockStatement>,
+    pub alternative: Option<Rc<BlockStatement>>,
 }
 
 impl AstNode for IfExpression {
@@ -302,7 +347,7 @@ impl Expression for IfExpression {}
 
 pub struct BlockStatement {
     pub token: Token,
-    pub statements: Vec<Box<dyn Statement>>,
+    pub statements: Vec<Rc<dyn Statement>>,
 }
 
 impl AstNode for BlockStatement {
@@ -323,7 +368,7 @@ impl Statement for BlockStatement {}
 
 pub struct PrefixExpression {
     pub token: Token,
-    pub right: Box<dyn Expression>,
+    pub right: Rc<dyn Expression>,
 }
 
 impl AstNode for PrefixExpression {
@@ -355,8 +400,8 @@ impl Expression for PrefixExpression {}
 
 pub struct InfixExpression {
     pub token: Token,
-    pub left: Box<dyn Expression>,
-    pub right: Box<dyn Expression>,
+    pub left: Rc<dyn Expression>,
+    pub right: Rc<dyn Expression>,
 }
 
 impl AstNode for InfixExpression {
@@ -399,10 +444,10 @@ impl AstNode for InfixExpression {
 impl Expression for InfixExpression {}
 
 pub struct Program {
-    pub statements: Vec<Box<dyn Statement>>,
+    pub statements: Vec<Rc<dyn Statement>>,
 }
 
-fn eval_statements(statements: &Vec<Box<dyn Statement>>, env: &mut Environment) -> EvalResult {
+fn eval_statements(statements: &Vec<Rc<dyn Statement>>, env: &mut Environment) -> EvalResult {
     let mut ret = Object::NULL;
     for stmt in statements {
         ret = stmt.eval(env)?;
@@ -427,7 +472,7 @@ impl AstNode for Program {
         for stmt in &self.statements {
             ret = stmt.eval(env)?;
             if let Object::RERUTN(val) = ret {
-                return Ok(*val);
+                return Ok(Object::RERUTN(val));
             }
         }
         Ok(ret)

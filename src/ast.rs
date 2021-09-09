@@ -156,6 +156,12 @@ fn unwrap_return_value(obj: Object) -> Object {
     }
 }
 
+impl FunctionCall {
+    fn arg_error(expected: usize, got: usize) -> EvalError {
+        EvalError::new(format!("expected {} args but got {} args", expected, got))
+    }
+}
+
 impl AstNode for FunctionCall {
     fn token_literal(&self) -> Token {
         self.token.clone()
@@ -172,25 +178,22 @@ impl AstNode for FunctionCall {
     fn eval(&self, env: &mut Environment) -> EvalResult {
         let func = self.function.eval(env)?;
         let args = eval_expressions(&self.args, env)?;
-        if let Object::FUNCTION(params, body) = func {
-            if args.len() != params.len() {
-                return Err(EvalError::new(format!(
-                    "expected {} args but got {} args",
-                    params.len(),
-                    args.len(),
-                )));
+        match func {
+            Object::FUNCTION(params, body) => {
+                if args.len() != params.len() {
+                    Err(FunctionCall::arg_error(params.len(), args.len()))
+                } else {
+                    let mut func_env = Environment::new_with_outer(env);
+                    params.into_iter().zip(args.into_iter()).for_each(
+                        |(ident, value)| match &ident.token {
+                            Token::IDENT(name) => func_env.set(name.clone(), value),
+                            _ => unreachable!(),
+                        },
+                    );
+                    Ok(unwrap_return_value(body.eval(&mut func_env)?))
+                }
             }
-            let mut func_env = Environment::new_with_outer(env);
-            params
-                .into_iter()
-                .zip(args.into_iter())
-                .for_each(|(ident, value)| match &ident.token {
-                    Token::IDENT(name) => func_env.set(name.clone(), value),
-                    _ => unreachable!(),
-                });
-            return Ok(unwrap_return_value(body.eval(&mut func_env)?));
-        } else {
-            return Err(EvalError::new("not callable".to_string()));
+            _ => Err(EvalError::new("not callable".to_string())),
         }
     }
 }
@@ -532,8 +535,14 @@ mod test_evaluator {
     fn test_func() {
         test_eval_match("let add = fn(a, b){ return a+b; }; add(1, 5)", "6");
         test_eval_match("let add = fn(a, b){ a+b; }; add(1, 5)", "6");
-        test_eval_match("let fac = fn(n){ if(n == 0){ return 1 } else { return fac(n-1)*n}}; fac(10)", "3628800");
-        test_eval_match("let fib = fn(n){ if(n < 3){ return 1 } else { return fib(n-1)+fib(n-2)}}; fib(15)", "610");
+        test_eval_match(
+            "let fac = fn(n){ if(n == 0){ return 1 } else { return fac(n-1)*n}}; fac(10)",
+            "3628800",
+        );
+        test_eval_match(
+            "let fib = fn(n){ if(n < 3){ return 1 } else { return fib(n-1)+fib(n-2)}}; fib(15)",
+            "610",
+        );
         test_is_err("let add = fn(a, b){ return a+b; }; add(1, 5, 9)");
         test_is_err("let add = fn(a, b){ return a+b; }; add(1)");
     }

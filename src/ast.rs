@@ -120,7 +120,10 @@ impl AstNode for StringLiteral {
     }
 
     fn eval(&self, _env: &mut Environment) -> EvalResult {
-        todo!()
+        match &self.token {
+            Token::STRING(name) => Ok(Object::STRING(name.clone())),
+            _ => panic!(),
+        }
     }
 }
 
@@ -517,6 +520,12 @@ mod test_evaluator {
     fn test_eval_bool_literal() {
         test_eval_match("true", "true");
         test_eval_match("false", "false");
+    }
+
+    #[test]
+    fn test_eval_string_literal() {
+        test_eval_match("\"Hello\"", "Hello");
+        test_eval_match("\"Hello World\"", "Hello World");
     }
 
     #[test]

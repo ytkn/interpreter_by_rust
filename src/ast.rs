@@ -1,4 +1,4 @@
-use std::{iter::Zip, rc::Rc};
+use std::rc::Rc;
 
 use crate::{environment::Environment, object::Object, token::Token};
 
@@ -180,19 +180,15 @@ impl AstNode for FunctionCall {
                     args.len(),
                 )));
             }
-            let mut func_env = Environment::new();
+            let mut func_env = Environment::new_with_outer(env);
             params
                 .into_iter()
                 .zip(args.into_iter())
-                .for_each(|(ident, value)| {
-                    if let Token::IDENT(name) = &ident.token {
-                        func_env.set(name.clone(), value);
-                    } else {
-                        unreachable!()
-                    }
+                .for_each(|(ident, value)| match &ident.token {
+                    Token::IDENT(name) => func_env.set(name.clone(), value),
+                    _ => unreachable!(),
                 });
-            let result = body.eval(&mut func_env)?;
-            return Ok(unwrap_return_value(result))
+            return Ok(unwrap_return_value(body.eval(&mut func_env)?));
         } else {
             return Err(EvalError::new("not callable".to_string()));
         }

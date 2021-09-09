@@ -129,7 +129,9 @@ impl Lexer {
             return Token::INT(self.read_number());
         }
         let tok = match self.cur() {
-            '\"' => Token::STRING(self.read_string()),
+            '\"' => {
+                return Token::STRING(self.read_string());
+            }
             '=' => match self.peek() {
                 '=' => {
                     self.next();
@@ -246,6 +248,14 @@ mod test {
         test_tokens_match(
             "\"say hello\"",
             vec![Token::STRING("say hello".to_string())],
+        );
+        test_tokens_match(
+            "\"hello\"+\"world\"",
+            vec![
+                Token::STRING("hello".to_string()),
+                Token::PLUS,
+                Token::STRING("world".to_string()),
+            ],
         );
     }
 

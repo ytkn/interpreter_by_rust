@@ -416,7 +416,11 @@ mod test_parser {
 
     #[test]
     fn test_string_literal() {
-        let test_cases = [("\"hello\"", "hello"), ("\"hello world\"", "hello world")];
+        let test_cases = [
+            ("\"hello\"", "hello"),
+            ("\"hello world\"", "hello world"),
+            ("\"hello\"+\"world\"", "(hello + world)"),
+        ];
         for (input, expected) in test_cases {
             test_match(input, expected)
         }

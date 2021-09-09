@@ -443,25 +443,43 @@ impl AstNode for InfixExpression {
     }
 
     fn eval(&self, env: &mut Environment) -> EvalResult {
-        let left_val = match self.left.eval(env)? {
-            Object::INTEGER(x) => x,
-            _ => Err(EvalError::new(format!("expected int for '{}'", self.token)))?,
-        };
-        let right_val = match self.right.eval(env)? {
-            Object::INTEGER(x) => x,
-            _ => Err(EvalError::new(format!("expected int for '{}'", self.token)))?,
-        };
-
-        match self.token {
-            Token::ASTERISK => Ok(Object::INTEGER(left_val * right_val)),
-            Token::SLASH => Ok(Object::INTEGER(left_val / right_val)),
-            Token::PLUS => Ok(Object::INTEGER(left_val + right_val)),
-            Token::MINUS => Ok(Object::INTEGER(left_val - right_val)),
-            Token::LT => Ok(Object::BOOLEAN(left_val < right_val)),
-            Token::GT => Ok(Object::BOOLEAN(left_val > right_val)),
-            Token::EQ => Ok(Object::BOOLEAN(left_val == right_val)),
-            Token::NE => Ok(Object::BOOLEAN(left_val != right_val)),
-            _ => unreachable!(),
+        match self.left.eval(env)? {
+            Object::INTEGER(left_val) => {
+                let right_val = match self.right.eval(env)? {
+                    Object::INTEGER(x) => x,
+                    _ => Err(EvalError::new(format!("expected int for '{}'", self.token)))?,
+                };
+                match self.token {
+                    Token::ASTERISK => Ok(Object::INTEGER(left_val * right_val)),
+                    Token::SLASH => Ok(Object::INTEGER(left_val / right_val)),
+                    Token::PLUS => Ok(Object::INTEGER(left_val + right_val)),
+                    Token::MINUS => Ok(Object::INTEGER(left_val - right_val)),
+                    Token::LT => Ok(Object::BOOLEAN(left_val < right_val)),
+                    Token::GT => Ok(Object::BOOLEAN(left_val > right_val)),
+                    Token::EQ => Ok(Object::BOOLEAN(left_val == right_val)),
+                    Token::NE => Ok(Object::BOOLEAN(left_val != right_val)),
+                    _ => unreachable!(),
+                }
+            }
+            Object::STRING(left_val) => {
+                let right_val = match self.right.eval(env)? {
+                    Object::STRING(x) => x,
+                    _ => Err(EvalError::new(format!("expected int for '{}'", self.token)))?,
+                };
+                match self.token {
+                    Token::PLUS => Ok(Object::STRING(format!("{}{}", left_val, right_val))),
+                    Token::LT => Ok(Object::BOOLEAN(left_val < right_val)),
+                    Token::GT => Ok(Object::BOOLEAN(left_val > right_val)),
+                    Token::EQ => Ok(Object::BOOLEAN(left_val == right_val)),
+                    Token::NE => Ok(Object::BOOLEAN(left_val != right_val)),
+                    Token::ASTERISK | Token::SLASH | Token::MINUS => Err(EvalError::new(format!(
+                        "'{}' is not defined for string",
+                        self.token
+                    )))?,
+                    _ => unreachable!(),
+                }
+            }
+            _ => Err(EvalError::new(format!("expected int for '{}'", self.token))),
         }
     }
 }

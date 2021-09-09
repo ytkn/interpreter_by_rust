@@ -28,7 +28,7 @@ fn precedence(token: Token) -> i32 {
         Token::PLUS | Token::MINUS => SUM,
         Token::ASTERISK | Token::SLASH => PRODUCT,
         Token::LPAREN => CALL,
-        _ => LOWEST, // 大丈夫？
+        _ => LOWEST,
     }
 }
 

@@ -484,13 +484,13 @@ mod test_evaluator {
     use super::{AstNode, EvalResult};
     #[test]
     fn test_eval_int_literal() {
-        assert_eq!("5", test_eval("5").unwrap().inspect());
-        assert_eq!("10", test_eval("10").unwrap().inspect());
+        test_eval_match("5", "5");
+        test_eval_match("10", "10");
     }
     #[test]
     fn test_eval_bool_literal() {
-        assert_eq!("true", test_eval("true").unwrap().inspect());
-        assert_eq!("false", test_eval("false").unwrap().inspect());
+        test_eval_match("true", "true");
+        test_eval_match("false", "false");
     }
 
     #[test]
@@ -504,17 +504,19 @@ mod test_evaluator {
         test_eval_match("100 == 10+10*9", "true");
         test_eval_match("100 != 10+10*9", "false");
         test_eval_match("180 != (10+10)*9", "false");
+        test_is_err("5+true");
+        test_is_err("true+false");
     }
 
     #[test]
     fn test_eval_prefix_operator() {
-        assert_eq!("false", test_eval("!true").unwrap().inspect());
-        assert_eq!("true", test_eval("!false").unwrap().inspect());
-        assert_eq!("false", test_eval("!5").unwrap().inspect());
-        assert_eq!("true", test_eval("!!5").unwrap().inspect());
-        assert_eq!("false", test_eval("!!false").unwrap().inspect());
-        assert_eq!("-5", test_eval("-5").unwrap().inspect());
-        assert_eq!("-10", test_eval("-10").unwrap().inspect());
+        test_eval_match("!true", "false");
+        test_eval_match("!false", "true");
+        test_eval_match("!5", "false");
+        test_eval_match("!!5", "true");
+        test_eval_match("!!false", "false");
+        test_eval_match("-5", "-5");
+        test_eval_match("-10", "-10");
     }
 
     #[test]
@@ -524,6 +526,16 @@ mod test_evaluator {
         test_eval_match("if(false){ 10 } else { 20 }", "20");
         test_eval_match("if(1*10 == 20){ 10 } else { 20 }", "20");
         test_eval_match("if(1+10/10 == 2){ 10 } else { 20 }", "10");
+    }
+
+    #[test]
+    fn test_func() {
+        test_eval_match("let add = fn(a, b){ return a+b; }; add(1, 5)", "6");
+        test_eval_match("let add = fn(a, b){ a+b; }; add(1, 5)", "6");
+        test_eval_match("let fac = fn(n){ if(n == 0){ return 1 } else { return fac(n-1)*n}}; fac(10)", "3628800");
+        test_eval_match("let fib = fn(n){ if(n < 3){ return 1 } else { return fib(n-1)+fib(n-2)}}; fib(15)", "610");
+        test_is_err("let add = fn(a, b){ return a+b; }; add(1, 5, 9)");
+        test_is_err("let add = fn(a, b){ return a+b; }; add(1)");
     }
 
     #[test]
@@ -539,6 +551,10 @@ mod test_evaluator {
 
     fn test_eval_match(input: &str, expected: &str) {
         assert_eq!(test_eval(input).unwrap().inspect(), expected);
+    }
+
+    fn test_is_err(input: &str) {
+        assert!(test_eval(input).is_err());
     }
 
     fn test_eval(input: &str) -> EvalResult {

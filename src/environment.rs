@@ -1,4 +1,4 @@
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 use crate::object::Object;
 
@@ -33,5 +33,17 @@ impl Environment<'_> {
     }
     pub fn set(&mut self, name: String, value: Object) {
         self.store.insert(name, value);
+    }
+
+    fn map_to_str(store: &HashMap<String, Object>) -> String {
+        store
+            .into_iter()
+            .map(|(k, v)| format!("{}: {}", k, v.inspect()))
+            .collect::<Vec<String>>()
+            .join("\n")
+    }
+
+    pub fn inspect(&self) -> String {
+        Environment::map_to_str(&self.store)
     }
 }

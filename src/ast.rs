@@ -1,6 +1,10 @@
 use std::rc::Rc;
 
-use crate::{environment::Environment, object::Object, token::Token};
+use crate::{
+    environment::Environment,
+    object::{get_builtin, Object},
+    token::Token,
+};
 
 #[derive(Debug)]
 pub struct EvalError {
@@ -8,7 +12,7 @@ pub struct EvalError {
 }
 
 impl EvalError {
-    fn new(msg: String) -> EvalError {
+    pub fn new(msg: String) -> EvalError {
         EvalError { msg }
     }
 }
@@ -62,9 +66,12 @@ impl AstNode for Identifier {
             Token::IDENT(name) => name,
             _ => unreachable!(),
         };
-        match env.get(name) {
-            Some(x) => Ok(x),
-            None => Err(EvalError::new(format!("{} not found", name))),
+        match get_builtin(name) {
+            Some(builtin) => Ok(builtin),
+            None => match env.get(name) {
+                Some(x) => Ok(x),
+                None => Err(EvalError::new(format!("{} not found", name))),
+            },
         }
     }
 }
@@ -102,6 +109,32 @@ impl AstNode for IntLiteral {
 }
 
 impl Expression for IntLiteral {}
+
+pub struct StringLiteral {
+    pub token: Token,
+}
+
+impl AstNode for StringLiteral {
+    fn token_literal(&self) -> Token {
+        self.token.clone()
+    }
+
+    fn to_string(&self) -> String {
+        match &self.token {
+            Token::STRING(x) => x.to_string(),
+            _ => panic!(),
+        }
+    }
+
+    fn eval(&self, _env: &mut Environment) -> EvalResult {
+        match &self.token {
+            Token::STRING(name) => Ok(Object::STRING(name.clone())),
+            _ => panic!(),
+        }
+    }
+}
+
+impl Expression for StringLiteral {}
 
 pub struct FunctionLiteral {
     pub token: Token,
@@ -193,6 +226,7 @@ impl AstNode for FunctionCall {
                     Ok(unwrap_return_value(body.eval(&mut func_env)?))
                 }
             }
+            Object::BUILTIN(builtin) => builtin(args),
             _ => Err(EvalError::new("not callable".to_string())),
         }
     }
@@ -417,25 +451,43 @@ impl AstNode for InfixExpression {
     }
 
     fn eval(&self, env: &mut Environment) -> EvalResult {
-        let left_val = match self.left.eval(env)? {
-            Object::INTEGER(x) => x,
-            _ => Err(EvalError::new(format!("expected int for '{}'", self.token)))?,
-        };
-        let right_val = match self.right.eval(env)? {
-            Object::INTEGER(x) => x,
-            _ => Err(EvalError::new(format!("expected int for '{}'", self.token)))?,
-        };
-
-        match self.token {
-            Token::ASTERISK => Ok(Object::INTEGER(left_val * right_val)),
-            Token::SLASH => Ok(Object::INTEGER(left_val / right_val)),
-            Token::PLUS => Ok(Object::INTEGER(left_val + right_val)),
-            Token::MINUS => Ok(Object::INTEGER(left_val - right_val)),
-            Token::LT => Ok(Object::BOOLEAN(left_val < right_val)),
-            Token::GT => Ok(Object::BOOLEAN(left_val > right_val)),
-            Token::EQ => Ok(Object::BOOLEAN(left_val == right_val)),
-            Token::NE => Ok(Object::BOOLEAN(left_val != right_val)),
-            _ => unreachable!(),
+        match self.left.eval(env)? {
+            Object::INTEGER(left_val) => {
+                let right_val = match self.right.eval(env)? {
+                    Object::INTEGER(x) => x,
+                    _ => Err(EvalError::new(format!("expected int for '{}'", self.token)))?,
+                };
+                match self.token {
+                    Token::ASTERISK => Ok(Object::INTEGER(left_val * right_val)),
+                    Token::SLASH => Ok(Object::INTEGER(left_val / right_val)),
+                    Token::PLUS => Ok(Object::INTEGER(left_val + right_val)),
+                    Token::MINUS => Ok(Object::INTEGER(left_val - right_val)),
+                    Token::LT => Ok(Object::BOOLEAN(left_val < right_val)),
+                    Token::GT => Ok(Object::BOOLEAN(left_val > right_val)),
+                    Token::EQ => Ok(Object::BOOLEAN(left_val == right_val)),
+                    Token::NE => Ok(Object::BOOLEAN(left_val != right_val)),
+                    _ => unreachable!(),
+                }
+            }
+            Object::STRING(left_val) => {
+                let right_val = match self.right.eval(env)? {
+                    Object::STRING(x) => x,
+                    _ => Err(EvalError::new(format!("expected int for '{}'", self.token)))?,
+                };
+                match self.token {
+                    Token::PLUS => Ok(Object::STRING(format!("{}{}", left_val, right_val))),
+                    Token::LT => Ok(Object::BOOLEAN(left_val < right_val)),
+                    Token::GT => Ok(Object::BOOLEAN(left_val > right_val)),
+                    Token::EQ => Ok(Object::BOOLEAN(left_val == right_val)),
+                    Token::NE => Ok(Object::BOOLEAN(left_val != right_val)),
+                    Token::ASTERISK | Token::SLASH | Token::MINUS => Err(EvalError::new(format!(
+                        "'{}' is not defined for string",
+                        self.token
+                    )))?,
+                    _ => unreachable!(),
+                }
+            }
+            _ => Err(EvalError::new(format!("expected int for '{}'", self.token))),
         }
     }
 }
@@ -497,6 +549,12 @@ mod test_evaluator {
     }
 
     #[test]
+    fn test_eval_string_literal() {
+        test_eval_match("\"Hello\"", "Hello");
+        test_eval_match("\"Hello World\"", "Hello World");
+    }
+
+    #[test]
     fn test_eval_infix_operator() {
         test_eval_match("5+5", "10");
         test_eval_match("5+5", "10");
@@ -506,7 +564,9 @@ mod test_evaluator {
         test_eval_match("10 < 10*9", "true");
         test_eval_match("100 == 10+10*9", "true");
         test_eval_match("100 != 10+10*9", "false");
-        test_eval_match("180 != (10+10)*9", "false");
+        test_eval_match("\"hello \" + \"world\"", "hello world");
+        test_eval_match("\"hello\" == \"hello\"", "true");
+        test_eval_match("\"hello\" == \"world\"", "false");
         test_is_err("5+true");
         test_is_err("true+false");
     }
@@ -551,6 +611,13 @@ mod test_evaluator {
     fn test_return() {
         test_eval_match("if(true){ return 10 }", "10");
         test_eval_match("if(true){ if(true) { return 10 } return 5 }", "10");
+    }
+
+    #[test]
+    fn test_builtin() {
+        test_eval_match("len(\"hello\")", "5");
+        test_eval_match("len(\"hello\" + \" world\")", "11");
+        test_is_err("len(1)");
     }
 
     #[test]

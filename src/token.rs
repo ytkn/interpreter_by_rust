@@ -31,6 +31,7 @@ pub enum Token {
 
     IDENT(String),
     INT(i32),
+    STRING(String),
     EOF,
 }
 
@@ -39,6 +40,7 @@ impl fmt::Display for Token {
         match self {
             Token::IDENT(name) => write!(f, "{}", format!("{}", name)),
             Token::INT(_) => write!(f, "int"),
+            Token::STRING(_) => write!(f, "string"),
             Token::PLUS => write!(f, "+"),
             Token::MINUS => write!(f, "-"),
             Token::ASTERISK => write!(f, "*"),
@@ -127,6 +129,9 @@ impl Lexer {
             return Token::INT(self.read_number());
         }
         let tok = match self.cur() {
+            '\"' => {
+                return Token::STRING(self.read_string());
+            }
             '=' => match self.peek() {
                 '=' => {
                     self.next();
@@ -185,6 +190,23 @@ impl Lexer {
             .unwrap() // 長すぎると死ぬ気がする
     }
 
+    fn read_string(&mut self) -> String {
+        if self.cur() != '\"' {
+            panic!("initial char is not '\"'");
+        }
+        self.next();
+        let l = self.pos;
+        while !self.at_eof() && self.cur() != '\"' {
+            self.next();
+        }
+        if self.cur() != '\"' {
+            panic!("'\"' not found");
+        }
+        let r = self.pos;
+        self.next();
+        self.input[l..r].into_iter().collect::<String>()
+    }
+
     pub fn at_eof(&self) -> bool {
         self.pos == self.input.len()
     }
@@ -218,6 +240,33 @@ mod test {
         assert!(!is_letter('='));
         assert!(!is_letter('{'));
         assert!(!is_letter('1'));
+    }
+
+    #[test]
+    fn test_token() {
+        test_tokens_match("\"hello\"", vec![Token::STRING("hello".to_string())]);
+        test_tokens_match(
+            "\"say hello\"",
+            vec![Token::STRING("say hello".to_string())],
+        );
+        test_tokens_match(
+            "\"hello\"+\"world\"",
+            vec![
+                Token::STRING("hello".to_string()),
+                Token::PLUS,
+                Token::STRING("world".to_string()),
+            ],
+        );
+    }
+
+    fn test_tokens_match(input: &str, expected: Vec<Token>) {
+        let mut lexer = Lexer::new(input);
+        let mut tokens = Vec::new();
+        while !lexer.at_eof() {
+            let tok = lexer.next_token();
+            tokens.push(tok);
+        }
+        assert_eq!(tokens, expected);
     }
 
     #[test]

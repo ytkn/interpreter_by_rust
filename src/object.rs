@@ -4,31 +4,6 @@ use crate::ast::{BlockStatement, EvalError, Identifier};
 
 type BuiltInFunc = fn(Vec<Object>) -> Result<Object, EvalError>;
 
-fn builtin_len(args: Vec<Object>) -> Result<Object, EvalError> {
-    if args.len() != 1 {
-        return Err(EvalError::new(
-            format!("expected 1 args but got {}.", args.len()).to_string(),
-        ));
-    }
-    match &args[0] {
-        Object::STRING(name) => Ok(Object::INTEGER(name.len() as i32)),
-        _ => Err(EvalError::new(
-            format!(
-                "expected string for len(), but got {}",
-                args[0].object_type()
-            )
-            .to_string(),
-        )),
-    }
-}
-
-pub fn get_builtin(name: &String) -> Option<Object> {
-    if name.eq("len") {
-        return Some(Object::BUILTIN(builtin_len));
-    }
-    None
-}
-
 #[derive(Clone)]
 pub enum Object {
     INTEGER(i32),
@@ -79,5 +54,11 @@ impl Object {
             Object::ARRAY(_) => "ARRAY".to_string(),
             Object::BUILTIN(_) => "BUILTIN".to_string(),
         }
+    }
+}
+pub fn unwrap_return_value(obj: Object) -> Object {
+    match obj {
+        Object::RERUTN(x) => (*x).clone(),
+        x => x,
     }
 }

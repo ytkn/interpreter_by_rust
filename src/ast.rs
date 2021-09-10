@@ -283,6 +283,45 @@ impl AstNode for ArrayLiteral {
 
 impl Expression for ArrayLiteral {}
 
+pub struct IndexExpression {
+    pub token: Token, // [
+    pub left: Rc<dyn Expression>,
+    pub index: Rc<dyn Expression>,
+}
+
+impl AstNode for IndexExpression {
+    fn token_literal(&self) -> Token {
+        self.token.clone()
+    }
+
+    fn to_string(&self) -> String {
+        format!("{}[{}]", self.left.to_string(), self.index.to_string())
+    }
+
+    fn eval(&self, env: &mut Environment) -> EvalResult {
+        match self.left.eval(env)? {
+            Object::ARRAY(arr) => match self.index.eval(env)? {
+                Object::INTEGER(index) => {
+                    let idx = index as usize;
+                    if idx < arr.len() {
+                        Ok(arr[idx as usize].clone())
+                    } else {
+                        Err(EvalError::new("index is too large".to_string()))
+                    }
+                }
+                _ => Err(EvalError::new(
+                    "array should be accessed by integer".to_string(),
+                )),
+            },
+            left => Err(EvalError::new(
+                format!("expected array but got {}", left.object_type()).to_string(),
+            )),
+        }
+    }
+}
+
+impl Expression for IndexExpression {}
+
 pub struct LetStatement {
     pub token: Token,
     pub ident: Identifier,
@@ -584,6 +623,14 @@ mod test_evaluator {
     fn test_eval_array_literal() {
         test_eval_match("[1, 2, 3]", "[1, 2, 3]");
         test_eval_match("[\"a\", 1]", "[a, 1]");
+    }
+
+    #[test]
+    fn test_eval_index() {
+        test_eval_match("[1, 2, 3][0]", "1");
+        test_eval_match("[1, 2, 3][2]", "3");
+        test_is_err("[1, 2, 3][3]");
+        test_eval_match("[\"a\", 1][0]", "a");
     }
 
     #[test]

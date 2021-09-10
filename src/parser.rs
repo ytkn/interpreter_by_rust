@@ -20,6 +20,7 @@ const SUM: i32 = 3;
 const PRODUCT: i32 = 4;
 const PREFIX: i32 = 5;
 const CALL: i32 = 6;
+const INDEX: i32 = 5;
 
 fn precedence(token: Token) -> i32 {
     match token {
@@ -28,6 +29,7 @@ fn precedence(token: Token) -> i32 {
         Token::PLUS | Token::MINUS => SUM,
         Token::ASTERISK | Token::SLASH => PRODUCT,
         Token::LPAREN => CALL,
+        Token::LBRACKET => INDEX,
         _ => LOWEST,
     }
 }
@@ -236,6 +238,7 @@ impl Parser {
                 | Token::LT
                 | Token::GT => self.parse_infix_expression(left)?,
                 Token::LPAREN => self.parse_function_call(left)?,
+                Token::LBRACKET => self.parse_index_expression(left)?,
                 _ => panic!(),
             };
         }
@@ -290,6 +293,22 @@ impl Parser {
                 token: Token::LPAREN,
                 function,
                 args,
+            }
+        }))
+    }
+
+    fn parse_index_expression(
+        &mut self,
+        left: Rc<dyn Expression>,
+    ) -> Result<Rc<IndexExpression>, ParseError> {
+        self.expect_token(Token::LBRACKET)?;
+        let index = self.parse_expression(LOWEST)?;
+        self.expect_token(Token::RBRACKET)?;
+        Ok(Rc::new({
+            IndexExpression {
+                token: Token::LBRACKET,
+                left,
+                index,
             }
         }))
     }

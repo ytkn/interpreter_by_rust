@@ -5,6 +5,10 @@ use crate::{
     token::Token,
 };
 
+fn arg_num_error(expected: usize, got: usize) -> EvalError {
+    EvalError::new(format!("expected {} args but got {}.", expected, got).to_string())
+}
+
 fn builtin_len(args: Vec<Object>) -> Result<Object, EvalError> {
     if args.len() != 1 {
         return Err(EvalError::new(
@@ -14,6 +18,7 @@ fn builtin_len(args: Vec<Object>) -> Result<Object, EvalError> {
     match &args[0] {
         Object::STRING(name) => Ok(Object::INTEGER(name.len() as i32)),
         Object::ARRAY(arr) => Ok(Object::INTEGER(arr.len() as i32)),
+        Object::DICT(map) => Ok(Object::INTEGER(map.len() as i32)),
         _ => Err(EvalError::new(
             format!(
                 "expected string or array for len(), but got {}",

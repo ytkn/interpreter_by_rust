@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 
 use crate::{
     builtin::get_builtin,
@@ -159,8 +159,14 @@ impl AstNode for DictLiteral {
         format!("{{{}}}", pairs_to_string(&self.pairs))
     }
 
-    fn eval(&self, _env: &mut Environment) -> EvalResult {
-        todo!()
+    fn eval(&self, env: &mut Environment) -> EvalResult {
+        let mut map = HashMap::new();
+        for (k, v) in &self.pairs {
+            let key = k.eval(env)?;
+            let value = v.eval(env)?;
+            map.insert(key.hash()?, (key, value));
+        }
+        Ok(Object::DICT(map))
     }
 }
 
@@ -336,8 +342,15 @@ impl AstNode for IndexExpression {
                     "array should be accessed by integer".to_string(),
                 )),
             },
+            Object::DICT(map) => {
+                let key = self.index.eval(env)?.hash()?;
+                match map.get(&key) {
+                    Some((_, v)) => Ok(v.clone()),
+                    None => Ok(Object::NULL),
+                }
+            }
             left => Err(EvalError::new(
-                format!("expected array but got {}", left.object_type()).to_string(),
+                format!("{} cannot by accessed by index", left.object_type()).to_string(),
             )),
         }
     }

@@ -49,6 +49,15 @@ pub enum Token {
     EOF,
 }
 
+impl Token {
+    pub fn ident_name(&self) -> Option<String> {
+        match self {
+            Token::IDENT(name) => Some((*name).clone()),
+            _ => None,
+        }
+    }
+}
+
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {

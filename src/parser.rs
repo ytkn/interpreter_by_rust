@@ -20,6 +20,7 @@ const SUM: i32 = 3;
 const PRODUCT: i32 = 4;
 const PREFIX: i32 = 5;
 const CALL: i32 = 6;
+const INDEX: i32 = 5;
 
 fn precedence(token: Token) -> i32 {
     match token {
@@ -28,6 +29,7 @@ fn precedence(token: Token) -> i32 {
         Token::PLUS | Token::MINUS => SUM,
         Token::ASTERISK | Token::SLASH => PRODUCT,
         Token::LPAREN => CALL,
+        Token::LBRACKET => INDEX,
         _ => LOWEST,
     }
 }
@@ -214,6 +216,7 @@ impl Parser {
             Token::INT(_) => self.parse_int_literal()?,
             Token::STRING(_) => self.parse_string_literal()?,
             Token::TRUE | Token::FALSE => self.parse_boolean()?,
+            Token::LBRACKET => self.parse_array_literal()?,
             Token::BANG | Token::MINUS => self.parse_prefix_expression()?,
             Token::LPAREN => self.parse_grouped_expression()?,
             Token::IF => self.parse_if_expression()?,
@@ -235,6 +238,7 @@ impl Parser {
                 | Token::LT
                 | Token::GT => self.parse_infix_expression(left)?,
                 Token::LPAREN => self.parse_function_call(left)?,
+                Token::LBRACKET => self.parse_index_expression(left)?,
                 _ => panic!(),
             };
         }
@@ -283,7 +287,7 @@ impl Parser {
         &mut self,
         function: Rc<dyn Expression>,
     ) -> Result<Rc<FunctionCall>, ParseError> {
-        let args = self.parse_call_args()?;
+        let args = self.parse_expression_list(Token::LPAREN, Token::RPAREN)?;
         Ok(Rc::new({
             FunctionCall {
                 token: Token::LPAREN,
@@ -293,17 +297,37 @@ impl Parser {
         }))
     }
 
-    fn parse_call_args(&mut self) -> Result<Vec<Rc<dyn Expression>>, ParseError> {
-        self.expect_token(Token::LPAREN)?;
+    fn parse_index_expression(
+        &mut self,
+        left: Rc<dyn Expression>,
+    ) -> Result<Rc<IndexExpression>, ParseError> {
+        self.expect_token(Token::LBRACKET)?;
+        let index = self.parse_expression(LOWEST)?;
+        self.expect_token(Token::RBRACKET)?;
+        Ok(Rc::new({
+            IndexExpression {
+                token: Token::LBRACKET,
+                left,
+                index,
+            }
+        }))
+    }
+
+    fn parse_expression_list(
+        &mut self,
+        start_token: Token,
+        end_token: Token,
+    ) -> Result<Vec<Rc<dyn Expression>>, ParseError> {
+        self.expect_token(start_token)?;
         let mut params = Vec::new();
-        while self.cur_token() != Token::RPAREN {
+        while self.cur_token() != end_token {
             params.push(self.parse_expression(LOWEST)?);
             if self.cur_token() != Token::COMMA {
                 break;
             }
             self.expect_token(Token::COMMA)?;
         }
-        self.expect_token(Token::RPAREN)?;
+        self.expect_token(end_token)?;
         Ok(params)
     }
 
@@ -351,6 +375,13 @@ impl Parser {
     fn parse_boolean(&mut self) -> Result<Rc<Boolean>, ParseError> {
         let token = self.expect_bool()?;
         Ok(Rc::new(Boolean { token }))
+    }
+
+    fn parse_array_literal(&mut self) -> Result<Rc<dyn Expression>, ParseError> {
+        Ok(Rc::new(ArrayLiteral {
+            token: Token::LBRACKET,
+            elements: self.parse_expression_list(Token::LBRACKET, Token::RBRACKET)?,
+        }))
     }
 
     fn parse_ident(&mut self) -> Result<Rc<Identifier>, ParseError> {
@@ -427,6 +458,19 @@ mod test_parser {
     }
 
     #[test]
+    fn test_array_literal() {
+        let test_cases = [
+            ("[1, 2, 3]", "[1, 2, 3]"),
+            ("[1, a, add(1, 2)]", "[1, a, add(1, 2)]"),
+        ];
+        for (input, expected) in test_cases {
+            test_match(input, expected)
+        }
+        test_is_err("[1, 2}");
+        test_is_err("[1, 2");
+    }
+
+    #[test]
     fn test_fn_call() {
         let test_cases = [
             ("add(a, b, c)", "add(a, b, c)"),
@@ -447,5 +491,16 @@ mod test_parser {
         let mut parser = Parser::new(tokens);
         let prog = parser.parse_program().unwrap();
         assert_eq!(prog.statements[0].to_string(), expected);
+    }
+
+    fn test_is_err(input: &str) {
+        let mut lexer = Lexer::new(input);
+        let mut tokens = Vec::new();
+        while !lexer.at_eof() {
+            let tok = lexer.next_token();
+            tokens.push(tok);
+        }
+        let mut parser = Parser::new(tokens);
+        assert!(parser.parse_program().is_err());
     }
 }

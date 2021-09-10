@@ -36,6 +36,7 @@ pub enum Object {
     STRING(String),
     RERUTN(Rc<Object>),
     FUNCTION(Vec<Rc<Identifier>>, Rc<BlockStatement>),
+    ARRAY(Vec<Object>),
     BUILTIN(BuiltInFunc),
     NULL,
 }
@@ -55,6 +56,14 @@ impl Object {
                     .join(", ");
                 format!("fn({})", params_str)
             }
+            Object::ARRAY(elements) => {
+                let elements_str = elements
+                    .into_iter()
+                    .map(|p| p.inspect())
+                    .collect::<Vec<String>>()
+                    .join(", ");
+                format!("[{}]", elements_str)
+            }
             Object::NULL => "null".to_string(),
             Object::BUILTIN(_) => "builtin".to_string(),
         }
@@ -67,6 +76,7 @@ impl Object {
             Object::RERUTN(_) => "RERUTN".to_string(),
             Object::NULL => "NULL".to_string(),
             Object::FUNCTION(_, _) => "FUNCTION".to_string(),
+            Object::ARRAY(_) => "ARRAY".to_string(),
             Object::BUILTIN(_) => "BUILTIN".to_string(),
         }
     }

@@ -20,6 +20,8 @@ pub enum Token {
     COMMA,
     LBRACE,
     RBRACE,
+    LBRACKET,
+    RBRACKET,
 
     LET,
     FUNCTION,
@@ -57,6 +59,8 @@ impl fmt::Display for Token {
             Token::COMMA => write!(f, ","),
             Token::LBRACE => write!(f, "{{"),
             Token::RBRACE => write!(f, "}}"),
+            Token::LBRACKET => write!(f, "["),
+            Token::RBRACKET => write!(f, "]"),
             Token::LET => write!(f, "let"),
             Token::FUNCTION => write!(f, "fn"),
             Token::TRUE => write!(f, "true"),
@@ -144,6 +148,8 @@ impl Lexer {
             ')' => Token::RPAREN,
             '{' => Token::LBRACE,
             '}' => Token::RBRACE,
+            '[' => Token::LBRACKET,
+            ']' => Token::RBRACKET,
             ',' => Token::COMMA,
             '+' => Token::PLUS,
             '-' => Token::MINUS,
@@ -243,7 +249,7 @@ mod test {
     }
 
     #[test]
-    fn test_token() {
+    fn test_string_token() {
         test_tokens_match("\"hello\"", vec![Token::STRING("hello".to_string())]);
         test_tokens_match(
             "\"say hello\"",
@@ -255,6 +261,20 @@ mod test {
                 Token::STRING("hello".to_string()),
                 Token::PLUS,
                 Token::STRING("world".to_string()),
+            ],
+        );
+    }
+
+    #[test]
+    fn test_bracket() {
+        test_tokens_match(
+            "[1, 2]",
+            vec![
+                Token::LBRACKET,
+                Token::INT(1),
+                Token::COMMA,
+                Token::INT(2),
+                Token::RBRACKET,
             ],
         );
     }

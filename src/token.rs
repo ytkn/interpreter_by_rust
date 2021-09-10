@@ -317,14 +317,22 @@ mod test {
         );
     }
 
+    #[test]
+    fn test_error() {
+        test_is_err("\"aaaaaa");
+        test_is_err("12345967899"); // overflow
+    }
+
     fn test_tokens_match(input: &str, expected: Vec<Token>) {
         let mut lexer = Lexer::new(input);
-        let mut tokens = Vec::new();
-        while !lexer.at_eof() {
-            let tok = lexer.next_token().unwrap();
-            tokens.push(tok);
-        }
+        let tokens = lexer.tokenize().unwrap();
         assert_eq!(tokens, expected);
+    }
+
+    fn test_is_err(input: &str) {
+        let mut lexer = Lexer::new(input);
+        let result = lexer.tokenize();
+        assert!(result.is_err());
     }
 
     #[test]

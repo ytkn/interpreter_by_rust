@@ -667,6 +667,9 @@ mod test_evaluator {
         test_eval_match("[1, 2, 3][2]", "3");
         test_is_err("[1, 2, 3][3]");
         test_eval_match("[\"a\", 1][0]", "a");
+        test_eval_match("{1: 2, 3: 4}[3]", "4");
+        test_eval_match("{1: 2, 3: 4}[2]", "null");
+        test_eval_match("{\"hello\": 2, 3: 4}[\"hello\"]", "2");
     }
 
     #[test]

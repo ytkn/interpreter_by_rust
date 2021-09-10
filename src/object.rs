@@ -1,17 +1,20 @@
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 
 use crate::ast::{BlockStatement, EvalError, Identifier};
 
 type BuiltInFunc = fn(Vec<Object>) -> Result<Object, EvalError>;
+type HashKey = (u8, u64);
+type HashPair = (Object, Object);
 
 #[derive(Clone)]
 pub enum Object {
     INTEGER(i32),
     BOOLEAN(bool),
     STRING(String),
+    ARRAY(Vec<Object>),
+    DICT(HashMap<HashKey, HashPair>),
     RERUTN(Rc<Object>),
     FUNCTION(Vec<Rc<Identifier>>, Rc<BlockStatement>),
-    ARRAY(Vec<Object>),
     BUILTIN(BuiltInFunc),
     NULL,
 }
@@ -22,6 +25,15 @@ impl Object {
             Object::INTEGER(x) => x.to_string(),
             Object::BOOLEAN(x) => x.to_string(),
             Object::STRING(x) => x.to_string(),
+            Object::DICT(map) => {
+                let content = map
+                    .values()
+                    .into_iter()
+                    .map(|(k, v)| format!("{}: {}", k.inspect(), v.inspect()))
+                    .collect::<Vec<String>>()
+                    .join(", ");
+                format!("{{{}}}", content).to_string()
+            }
             Object::RERUTN(x) => x.inspect(),
             Object::FUNCTION(params, _) => {
                 let params_str = params
@@ -48,11 +60,32 @@ impl Object {
             Object::INTEGER(_) => "INTEGER".to_string(),
             Object::BOOLEAN(_) => "BOOLEAN".to_string(),
             Object::STRING(_) => "STRING".to_string(),
+            Object::DICT(_) => "DICT".to_string(),
             Object::RERUTN(_) => "RERUTN".to_string(),
             Object::NULL => "NULL".to_string(),
             Object::FUNCTION(_, _) => "FUNCTION".to_string(),
             Object::ARRAY(_) => "ARRAY".to_string(),
             Object::BUILTIN(_) => "BUILTIN".to_string(),
+        }
+    }
+    pub fn hash(&self) -> Result<HashKey, EvalError> {
+        match &self {
+            Object::INTEGER(val) => Ok((0, *val as u64)),
+            Object::BOOLEAN(f) => match f {
+                true => Ok((1, 1)),
+                false => Ok((1, 0)),
+            },
+            Object::STRING(s) => {
+                let sum = s
+                    .chars()
+                    .into_iter()
+                    .map(|c| c as u64)
+                    .fold(0, |a, b| a + b);
+                Ok((2, sum))
+            }
+            _ => Err(EvalError::new(
+                format!("{} is not hashable", self.object_type()).to_string(),
+            )),
         }
     }
 }

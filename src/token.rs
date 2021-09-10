@@ -15,6 +15,7 @@ pub enum Token {
     ASSIGN,
     BANG,
     SEMICOLON,
+    COLON,
     LPAREN,
     RPAREN,
     COMMA,
@@ -54,6 +55,7 @@ impl fmt::Display for Token {
             Token::ASSIGN => write!(f, "="),
             Token::BANG => write!(f, "!"),
             Token::SEMICOLON => write!(f, ";"),
+            Token::COLON => write!(f, ":"),
             Token::LPAREN => write!(f, "("),
             Token::RPAREN => write!(f, ")"),
             Token::COMMA => write!(f, ","),
@@ -144,6 +146,7 @@ impl Lexer {
                 _ => Token::ASSIGN,
             },
             ';' => Token::SEMICOLON,
+            ':' => Token::COLON,
             '(' => Token::LPAREN,
             ')' => Token::RPAREN,
             '{' => Token::LBRACE,
@@ -275,6 +278,20 @@ mod test {
                 Token::COMMA,
                 Token::INT(2),
                 Token::RBRACKET,
+            ],
+        );
+    }
+
+    #[test]
+    fn test_colon() {
+        test_tokens_match(
+            "{\"a\": 2}",
+            vec![
+                Token::LBRACE,
+                Token::STRING("a".to_string()),
+                Token::COLON,
+                Token::INT(2),
+                Token::RBRACE,
             ],
         );
     }

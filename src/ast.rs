@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 
 use crate::{
     builtin::get_builtin,
@@ -136,6 +136,41 @@ impl AstNode for StringLiteral {
 }
 
 impl Expression for StringLiteral {}
+
+pub struct DictLiteral {
+    pub token: Token,
+    pub pairs: Vec<(Rc<dyn Expression>, Rc<dyn Expression>)>,
+}
+
+fn pairs_to_string(pairs: &Vec<(Rc<dyn Expression>, Rc<dyn Expression>)>) -> String {
+    pairs
+        .into_iter()
+        .map(|(k, v)| format!("{}: {}", k.to_string(), v.to_string()))
+        .collect::<Vec<String>>()
+        .join(", ")
+}
+
+impl AstNode for DictLiteral {
+    fn token_literal(&self) -> Token {
+        self.token.clone()
+    }
+
+    fn to_string(&self) -> String {
+        format!("{{{}}}", pairs_to_string(&self.pairs))
+    }
+
+    fn eval(&self, env: &mut Environment) -> EvalResult {
+        let mut map = HashMap::new();
+        for (k, v) in &self.pairs {
+            let key = k.eval(env)?;
+            let value = v.eval(env)?;
+            map.insert(key.hash()?, (key, value));
+        }
+        Ok(Object::DICT(map))
+    }
+}
+
+impl Expression for DictLiteral {}
 
 pub struct FunctionLiteral {
     pub token: Token,
@@ -307,8 +342,15 @@ impl AstNode for IndexExpression {
                     "array should be accessed by integer".to_string(),
                 )),
             },
+            Object::DICT(map) => {
+                let key = self.index.eval(env)?.hash()?;
+                match map.get(&key) {
+                    Some((_, v)) => Ok(v.clone()),
+                    None => Ok(Object::NULL),
+                }
+            }
             left => Err(EvalError::new(
-                format!("expected array but got {}", left.object_type()).to_string(),
+                format!("{} cannot by accessed by index", left.object_type()).to_string(),
             )),
         }
     }

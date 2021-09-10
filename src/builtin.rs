@@ -142,6 +142,13 @@ fn builtin_dict_from(args: Vec<Object>) -> Result<Object, EvalError> {
     }
 }
 
+fn builtin_puts(args: Vec<Object>) -> Result<Object, EvalError> {
+    for arg in args {
+        println!("{}", arg.inspect());
+    }
+    Ok(Object::NULL)
+}
+
 pub fn get_builtin(name: &String) -> Option<Object> {
     if name.eq("len") {
         return Some(Object::BUILTIN(builtin_len));
@@ -166,6 +173,9 @@ pub fn get_builtin(name: &String) -> Option<Object> {
     }
     if name.eq("dict_from") {
         return Some(Object::BUILTIN(builtin_dict_from));
+    }
+    if name.eq("puts") {
+        return Some(Object::BUILTIN(builtin_puts));
     }
     None
 }

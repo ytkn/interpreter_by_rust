@@ -516,11 +516,7 @@ mod test_parser {
 
     fn test_match(input: &str, expected: &str) {
         let mut lexer = Lexer::new(input);
-        let mut tokens = Vec::new();
-        while !lexer.at_eof() {
-            let tok = lexer.next_token();
-            tokens.push(tok);
-        }
+        let tokens = lexer.tokenize().unwrap();
         let mut parser = Parser::new(tokens);
         let prog = parser.parse_program().unwrap();
         assert_eq!(prog.statements[0].to_string(), expected);
@@ -528,11 +524,7 @@ mod test_parser {
 
     fn test_is_err(input: &str) {
         let mut lexer = Lexer::new(input);
-        let mut tokens = Vec::new();
-        while !lexer.at_eof() {
-            let tok = lexer.next_token();
-            tokens.push(tok);
-        }
+        let tokens = lexer.tokenize().unwrap();
         let mut parser = Parser::new(tokens);
         assert!(parser.parse_program().is_err());
     }

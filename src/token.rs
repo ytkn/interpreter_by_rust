@@ -1,5 +1,16 @@
 use std::fmt;
 
+#[derive(Debug)]
+pub struct TokenizeError {
+    pub msg: String,
+}
+
+impl TokenizeError {
+    fn new(msg: String) -> TokenizeError {
+        TokenizeError { msg }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Token {
     PLUS,
@@ -111,16 +122,25 @@ impl Lexer {
         self.pos += 1;
     }
 
-    pub fn next_token(&mut self) -> Token {
+    pub fn tokenize(&mut self) -> Result<Vec<Token>, TokenizeError> {
+        let mut tokens = Vec::new();
+        while !self.at_eof() {
+            let tok = self.next_token()?;
+            tokens.push(tok);
+        }
+        Ok(tokens)
+    }
+
+    fn next_token(&mut self) -> Result<Token, TokenizeError> {
         while self.cur().is_whitespace() {
             self.next();
         }
         if self.at_eof() {
-            return Token::EOF;
+            return Ok(Token::EOF);
         }
         if is_letter(self.cur()) {
             let ident = self.read_ident();
-            return match &*ident {
+            let tok = match &*ident {
                 "fn" => Token::FUNCTION,
                 "let" => Token::LET,
                 "true" => Token::TRUE,
@@ -130,13 +150,14 @@ impl Lexer {
                 "return" => Token::RETURN,
                 _ => Token::IDENT(ident),
             };
+            return Ok(tok);
         }
         if self.cur().is_digit(10) {
-            return Token::INT(self.read_number());
+            return Ok(Token::INT(self.read_number()?));
         }
         let tok = match self.cur() {
             '\"' => {
-                return Token::STRING(self.read_string());
+                return Ok(Token::STRING(self.read_string()?));
             }
             '=' => match self.peek() {
                 '=' => {
@@ -167,10 +188,10 @@ impl Lexer {
                 }
                 _ => Token::BANG,
             },
-            x => unreachable!(format!("unreachable: {}", x)),
+            x => return Err(TokenizeError::new(format!("invalid char: {}", x))),
         };
         self.next();
-        tok
+        Ok(tok)
     }
 
     fn read_ident(&mut self) -> String {
@@ -184,7 +205,7 @@ impl Lexer {
         self.input[l..self.pos].into_iter().collect()
     }
 
-    fn read_number(&mut self) -> i32 {
+    fn read_number(&mut self) -> Result<i32, TokenizeError> {
         if !self.cur().is_digit(10) {
             panic!("initial char is not a digit");
         }
@@ -195,11 +216,11 @@ impl Lexer {
         self.input[l..self.pos]
             .into_iter()
             .collect::<String>()
-            .parse()
-            .unwrap() // 長すぎると死ぬ気がする
+            .parse::<i32>()
+            .or_else(|_| Err(TokenizeError::new("failed to parse int".to_string())))
     }
 
-    fn read_string(&mut self) -> String {
+    fn read_string(&mut self) -> Result<String, TokenizeError> {
         if self.cur() != '\"' {
             panic!("initial char is not '\"'");
         }
@@ -209,11 +230,11 @@ impl Lexer {
             self.next();
         }
         if self.cur() != '\"' {
-            panic!("'\"' not found");
+            return Err(TokenizeError::new("'\"' not found".to_string()));
         }
         let r = self.pos;
         self.next();
-        self.input[l..r].into_iter().collect::<String>()
+        Ok(self.input[l..r].into_iter().collect::<String>())
     }
 
     pub fn at_eof(&self) -> bool {
@@ -300,7 +321,7 @@ mod test {
         let mut lexer = Lexer::new(input);
         let mut tokens = Vec::new();
         while !lexer.at_eof() {
-            let tok = lexer.next_token();
+            let tok = lexer.next_token().unwrap();
             tokens.push(tok);
         }
         assert_eq!(tokens, expected);
@@ -328,7 +349,7 @@ mod test {
         let mut lexer = Lexer::new(input);
         let mut tokens = Vec::new();
         while !lexer.at_eof() {
-            let tok = lexer.next_token();
+            let tok = lexer.next_token().unwrap();
             tokens.push(tok);
         }
         let expected = [

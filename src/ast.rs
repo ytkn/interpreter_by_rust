@@ -764,11 +764,7 @@ mod test_evaluator {
 
     fn test_eval(input: &str) -> EvalResult {
         let mut lexer = Lexer::new(input);
-        let mut tokens = Vec::new();
-        while !lexer.at_eof() {
-            let tok = lexer.next_token();
-            tokens.push(tok);
-        }
+        let tokens = lexer.tokenize().unwrap();
         let mut parser = Parser::new(tokens);
         let prog = parser.parse_program().unwrap();
         let mut env = Environment::new();

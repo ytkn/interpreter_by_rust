@@ -41,6 +41,7 @@ pub enum Token {
     FALSE,
     IF,
     ELSE,
+    WHILE,
     RETURN,
 
     IDENT(String),
@@ -89,6 +90,7 @@ impl fmt::Display for Token {
             Token::FALSE => write!(f, "false"),
             Token::IF => write!(f, "if"),
             Token::ELSE => write!(f, "else"),
+            Token::WHILE => write!(f, "while"),
             Token::RETURN => write!(f, "return"),
             Token::EOF => write!(f, "EOF"),
         }
@@ -156,6 +158,7 @@ impl Lexer {
                 "false" => Token::FALSE,
                 "if" => Token::IF,
                 "else" => Token::ELSE,
+                "while" => Token::WHILE,
                 "return" => Token::RETURN,
                 _ => Token::IDENT(ident),
             };
@@ -321,6 +324,24 @@ mod test {
                 Token::STRING("a".to_string()),
                 Token::COLON,
                 Token::INT(2),
+                Token::RBRACE,
+            ],
+        );
+    }
+
+    #[test]
+    fn test_while() {
+        test_tokens_match(
+            "while(true){ 1+1 }",
+            vec![
+                Token::WHILE,
+                Token::LPAREN,
+                Token::TRUE,
+                Token::RPAREN,
+                Token::LBRACE,
+                Token::INT(1),
+                Token::PLUS,
+                Token::INT(1),
                 Token::RBRACE,
             ],
         );

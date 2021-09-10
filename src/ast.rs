@@ -474,6 +474,46 @@ impl AstNode for IfExpression {
 
 impl Expression for IfExpression {}
 
+pub struct WhileExpression {
+    pub token: Token, // while
+    pub condition: Rc<dyn Expression>,
+    pub statements: Rc<BlockStatement>,
+}
+
+impl AstNode for WhileExpression {
+    fn token_literal(&self) -> Token {
+        self.token.clone()
+    }
+
+    fn to_string(&self) -> String {
+        format!(
+            "while({}){{{}}}",
+            self.condition.to_string(),
+            self.statements.to_string()
+        )
+    }
+
+    fn eval(&self, env: &mut Environment) -> EvalResult {
+        let mut ret = Object::NULL;
+        loop {
+            match self.condition.eval(env)? {
+                Object::BOOLEAN(false) | Object::NULL => {
+                    break;
+                }
+                _ => {
+                    ret = self.statements.eval(env)?;
+                }
+            }
+            if let Object::RERUTN(_) = ret {
+                break;
+            }
+        }
+        Ok(ret)
+    }
+}
+
+impl Expression for WhileExpression {}
+
 pub struct BlockStatement {
     pub token: Token,
     pub statements: Vec<Rc<dyn Statement>>,

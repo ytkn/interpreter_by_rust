@@ -221,6 +221,7 @@ impl Parser {
             Token::BANG | Token::MINUS => self.parse_prefix_expression()?,
             Token::LPAREN => self.parse_grouped_expression()?,
             Token::IF => self.parse_if_expression()?,
+            Token::WHILE => self.parse_while_expression()?,
             Token::FUNCTION => self.parse_function_literal()?,
             _ => Err(ParseError::new(format!(
                 "at {} th token {}",
@@ -271,6 +272,19 @@ impl Parser {
             condition,
             consequense,
             alternative,
+        }))
+    }
+
+    fn parse_while_expression(&mut self) -> Result<Rc<dyn Expression>, ParseError> {
+        self.expect_token(Token::WHILE)?;
+        self.expect_token(Token::LPAREN)?;
+        let condition = self.parse_expression(LOWEST)?;
+        self.expect_token(Token::RPAREN)?;
+        let statements = self.parse_block_statement()?;
+        Ok(Rc::new(WhileExpression {
+            token: Token::WHILE,
+            condition,
+            statements,
         }))
     }
 
@@ -448,6 +462,19 @@ mod test_parser {
                 x-y
             }",
             "if(x < y) (y - x) else (x - y)",
+        )];
+        for (input, expected) in test_cases {
+            test_match(input, expected)
+        }
+    }
+
+    #[test]
+    fn test_whle_expression() {
+        let test_cases = [(
+            "while(x < y) {
+                let x = x+1;
+            }",
+            "while((x < y)){let x = (x + 1)}",
         )];
         for (input, expected) in test_cases {
             test_match(input, expected)

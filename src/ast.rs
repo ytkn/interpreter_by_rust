@@ -276,8 +276,8 @@ impl AstNode for ArrayLiteral {
         format!("[{}]", expressions_to_string(&self.elements, ", "))
     }
 
-    fn eval(&self, _env: &mut Environment) -> EvalResult {
-        todo!()
+    fn eval(&self, env: &mut Environment) -> EvalResult {
+        Ok(Object::ARRAY(eval_expressions(&self.elements, env)?))
     }
 }
 
@@ -578,6 +578,12 @@ mod test_evaluator {
     fn test_eval_string_literal() {
         test_eval_match("\"Hello\"", "Hello");
         test_eval_match("\"Hello World\"", "Hello World");
+    }
+
+    #[test]
+    fn test_eval_array_literal() {
+        test_eval_match("[1, 2, 3]", "[1, 2, 3]");
+        test_eval_match("[\"a\", 1]", "[a, 1]");
     }
 
     #[test]

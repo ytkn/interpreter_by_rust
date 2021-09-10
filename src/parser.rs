@@ -447,6 +447,8 @@ mod test_parser {
         for (input, expected) in test_cases {
             test_match(input, expected)
         }
+        test_is_err("[1, 2}");
+        test_is_err("[1, 2");
     }
 
     #[test]
@@ -470,5 +472,16 @@ mod test_parser {
         let mut parser = Parser::new(tokens);
         let prog = parser.parse_program().unwrap();
         assert_eq!(prog.statements[0].to_string(), expected);
+    }
+
+    fn test_is_err(input: &str) {
+        let mut lexer = Lexer::new(input);
+        let mut tokens = Vec::new();
+        while !lexer.at_eof() {
+            let tok = lexer.next_token();
+            tokens.push(tok);
+        }
+        let mut parser = Parser::new(tokens);
+        assert!(parser.parse_program().is_err());
     }
 }

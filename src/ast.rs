@@ -1,8 +1,9 @@
 use std::rc::Rc;
 
 use crate::{
+    builtin::get_builtin,
     environment::Environment,
-    object::{get_builtin, Object},
+    object::{unwrap_return_value, Object},
     token::Token,
 };
 
@@ -180,13 +181,6 @@ fn eval_expressions(
         result.push(exp.eval(env)?)
     }
     Ok(result)
-}
-
-fn unwrap_return_value(obj: Object) -> Object {
-    match obj {
-        Object::RERUTN(x) => (*x).clone(),
-        x => x,
-    }
 }
 
 impl FunctionCall {
@@ -696,7 +690,18 @@ mod test_evaluator {
     fn test_builtin() {
         test_eval_match("len(\"hello\")", "5");
         test_eval_match("len(\"hello\" + \" world\")", "11");
+        test_eval_match("len([1, 2, 3])", "3");
+        test_eval_match("first([1, 2, 3])", "1");
+        test_eval_match("last([1, 2, 3])", "3");
+        test_eval_match("tail([1, 2, 3])", "[2, 3]");
+        test_eval_match("range(5)", "[0, 1, 2, 3, 4]");
         test_is_err("len(1)");
+        test_is_err("first(1)");
+        test_is_err("last(1)");
+        test_is_err("tail(1)");
+        test_is_err("first([])");
+        test_is_err("last([])");
+        test_is_err("tail([])");
     }
 
     #[test]

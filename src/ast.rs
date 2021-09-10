@@ -137,6 +137,35 @@ impl AstNode for StringLiteral {
 
 impl Expression for StringLiteral {}
 
+pub struct DictLiteral {
+    pub token: Token,
+    pub pairs: Vec<(Rc<dyn Expression>, Rc<dyn Expression>)>,
+}
+
+fn pairs_to_string(pairs: &Vec<(Rc<dyn Expression>, Rc<dyn Expression>)>) -> String {
+    pairs
+        .into_iter()
+        .map(|(k, v)| format!("{}: {}", k.to_string(), v.to_string()))
+        .collect::<Vec<String>>()
+        .join(", ")
+}
+
+impl AstNode for DictLiteral {
+    fn token_literal(&self) -> Token {
+        self.token.clone()
+    }
+
+    fn to_string(&self) -> String {
+        format!("{{{}}}", pairs_to_string(&self.pairs))
+    }
+
+    fn eval(&self, _env: &mut Environment) -> EvalResult {
+        todo!()
+    }
+}
+
+impl Expression for DictLiteral {}
+
 pub struct FunctionLiteral {
     pub token: Token,
     pub params: Vec<Rc<Identifier>>,

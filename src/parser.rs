@@ -217,6 +217,7 @@ impl Parser {
             Token::STRING(_) => self.parse_string_literal()?,
             Token::TRUE | Token::FALSE => self.parse_boolean()?,
             Token::LBRACKET => self.parse_array_literal()?,
+            Token::LBRACE => self.parse_dict()?,
             Token::BANG | Token::MINUS => self.parse_prefix_expression()?,
             Token::LPAREN => self.parse_grouped_expression()?,
             Token::IF => self.parse_if_expression()?,
@@ -377,6 +378,26 @@ impl Parser {
         Ok(Rc::new(Boolean { token }))
     }
 
+    fn parse_dict(&mut self) -> Result<Rc<DictLiteral>, ParseError> {
+        self.expect_token(Token::LBRACE)?;
+        let mut pairs = Vec::new();
+        while self.cur_token() != Token::EOF && self.cur_token() != Token::RBRACE {
+            let key = self.parse_expression(LOWEST)?;
+            self.expect_token(Token::COLON)?;
+            let value = self.parse_expression(LOWEST)?;
+            pairs.push((key, value));
+            if self.cur_token() != Token::COMMA {
+                break;
+            }
+            self.expect_token(Token::COMMA)?;
+        }
+        self.expect_token(Token::RBRACE)?;
+        Ok(Rc::new(DictLiteral {
+            token: Token::LBRACE,
+            pairs,
+        }))
+    }
+
     fn parse_array_literal(&mut self) -> Result<Rc<dyn Expression>, ParseError> {
         Ok(Rc::new(ArrayLiteral {
             token: Token::LBRACKET,
@@ -451,6 +472,18 @@ mod test_parser {
             ("\"hello\"", "hello"),
             ("\"hello world\"", "hello world"),
             ("\"hello\"+\"world\"", "(hello + world)"),
+        ];
+        for (input, expected) in test_cases {
+            test_match(input, expected)
+        }
+    }
+
+    #[test]
+    fn test_dict_literal() {
+        let test_cases = [
+            ("{\"hello\": 1, \"world\": 2}", "{hello: 1, world: 2}"),
+            ("{\"hello\": 1, 10: 2}", "{hello: 1, 10: 2}"),
+            ("{}", "{}"),
         ];
         for (input, expected) in test_cases {
             test_match(input, expected)

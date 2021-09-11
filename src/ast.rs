@@ -3,6 +3,7 @@ use std::{collections::HashMap, rc::Rc};
 use crate::{
     builtin::get_builtin,
     environment::Environment,
+    formatter::Formattable,
     object::{unwrap_return_value, Object},
     token::Token,
 };
@@ -20,7 +21,7 @@ impl EvalError {
 
 type EvalResult = Result<Object, EvalError>;
 
-pub trait AstNode {
+pub trait AstNode: Formattable {
     fn token_literal(&self) -> Token;
     fn to_string(&self) -> String;
     fn eval(&self, env: &mut Environment) -> EvalResult;

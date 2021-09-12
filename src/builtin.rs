@@ -192,6 +192,23 @@ fn builtin_input(args: Vec<Object>) -> Result<Object, EvalError> {
     }
 }
 
+fn builtin_split(args: Vec<Object>) -> Result<Object, EvalError> {
+    check_arg_num("split", 2, args.len())?;
+    match &args[0] {
+        Object::STRING(target) => match &args[1] {
+            Object::STRING(token) => Ok(Object::ARRAY(
+                target
+                    .split(token)
+                    .into_iter()
+                    .map(|s| Object::STRING(s.to_string()))
+                    .collect(),
+            )),
+            second_arg => Err(arg_type_error("split", "string", second_arg.object_type())),
+        },
+        first_arg => Err(arg_type_error("split", "string", first_arg.object_type())),
+    }
+}
+
 pub fn get_builtin(name: &String) -> Option<Object> {
     if name.eq("len") {
         return Some(Object::BUILTIN(builtin_len));
@@ -231,6 +248,9 @@ pub fn get_builtin(name: &String) -> Option<Object> {
     }
     if name.eq("input") {
         return Some(Object::BUILTIN(builtin_input));
+    }
+    if name.eq("split") {
+        return Some(Object::BUILTIN(builtin_split));
     }
     None
 }

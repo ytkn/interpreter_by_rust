@@ -269,7 +269,7 @@ mod test {
     #[test]
     fn test_format() {
         let input = "let add = fn(n){ if(n != 10){ let x = n != 10*2; return x }else{ return (n+10)*(10+19) } }";
-        let expected = "let add = fn(n) {\n    if (n != 10) {\n        let x = n != 10 * 2;\n        retrun x;\n    } else {\n        retrun (n + 10) * (10 + 19);\n    }\n};\n";
+        let expected = "let add = fn(n) {\n    if (n != 10) {\n        let x = n != 10 * 2;\n        return x;\n    } else {\n        return (n + 10) * (10 + 19);\n    };\n};\n";
         run(input, expected)
     }
 

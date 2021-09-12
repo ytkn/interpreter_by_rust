@@ -1,26 +1,49 @@
+extern crate clap;
+use clap::{App, Arg};
+
 use interpreter::environment::Environment;
+use interpreter::formatter::run_formatter;
 use interpreter::token::Token;
 use interpreter::{parser::Parser, token::Lexer};
+use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::{env, fs};
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    if *&args.last().unwrap().ends_with(".monkey") {
-        let filename = &args.last().unwrap();
-        let input = fs::read_to_string(filename).expect("failed to read");
-        let mut lexer = Lexer::new(input.as_str());
-        let tokenize_result = lexer.tokenize();
-        match tokenize_result {
-            Ok(tokens) => {
-                let mut environment = Environment::new();
-                parse_and_eval(tokens, &mut environment);
+    let app = App::new("monkey")
+        .version("0.1.0")
+        .author("ytkn")
+        .arg(Arg::with_name("file").help("file to read").required(false))
+        .arg(
+            Arg::with_name("format")
+                .help("if on. runs formatter")
+                .short("f")
+                .long("format"),
+        );
+    let matches = app.get_matches();
+    match matches.value_of("file") {
+        Some(filename) => {
+            let input = fs::read_to_string(filename).expect("failed to read");
+            match Lexer::new(input.as_str()).tokenize() {
+                Ok(tokens) => {
+                    if matches.is_present("format") {
+                        let formatted = run_formatter(tokens).unwrap();
+                        write_content_to_file(formatted, filename);
+                        println!("formatted {}", filename);
+                    } else {
+                        let mut environment = Environment::new();
+                        parse_and_eval(tokens, &mut environment);
+                    }
+                }
+                Err(err) => println!("{}", err.msg),
             }
-            Err(err) => println!("{}", err.msg),
         }
-    } else {
-        run_interpreter();
-    }
+        None => run_interpreter(),
+    };
+}
+
+fn write_content_to_file(content: String, filename: &str) {
+    let mut file = OpenOptions::new().write(true).open(filename).unwrap();
+    file.write_all(content.as_bytes()).unwrap()
 }
 
 fn parse_and_eval(tokens: Vec<Token>, environment: &mut Environment) {

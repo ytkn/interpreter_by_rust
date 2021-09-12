@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, io};
 
 use crate::{
     ast::{AstNode, EvalError},
@@ -165,6 +165,50 @@ fn builtin_puts(args: Vec<Object>) -> Result<Object, EvalError> {
     Ok(Object::NULL)
 }
 
+fn builtin_str(args: Vec<Object>) -> Result<Object, EvalError> {
+    check_arg_num("str", 1, args.len())?;
+    Ok(Object::STRING(args[0].inspect()))
+}
+
+fn builtin_int(args: Vec<Object>) -> Result<Object, EvalError> {
+    check_arg_num("int", 1, args.len())?;
+    if let Object::STRING(target) = &args[0] {
+        target
+            .parse::<i32>()
+            .map(|x| Object::INTEGER(x))
+            .or_else(|_| Err(EvalError::new("could not convert to int".to_string())))
+    } else {
+        Err(arg_type_error("int", "string", args[0].object_type()))
+    }
+}
+
+fn builtin_input(args: Vec<Object>) -> Result<Object, EvalError> {
+    check_arg_num("input", 0, args.len())?;
+    let mut buffer = String::new();
+
+    match io::stdin().read_line(&mut buffer) {
+        Ok(_) => Ok(Object::STRING(buffer.trim_end().to_string())),
+        Err(_) => Err(EvalError::new("could not read stdin".to_string())),
+    }
+}
+
+fn builtin_split(args: Vec<Object>) -> Result<Object, EvalError> {
+    check_arg_num("split", 2, args.len())?;
+    match &args[0] {
+        Object::STRING(target) => match &args[1] {
+            Object::STRING(token) => Ok(Object::ARRAY(
+                target
+                    .split(token)
+                    .into_iter()
+                    .map(|s| Object::STRING(s.to_string()))
+                    .collect(),
+            )),
+            second_arg => Err(arg_type_error("split", "string", second_arg.object_type())),
+        },
+        first_arg => Err(arg_type_error("split", "string", first_arg.object_type())),
+    }
+}
+
 pub fn get_builtin(name: &String) -> Option<Object> {
     if name.eq("len") {
         return Some(Object::BUILTIN(builtin_len));
@@ -195,6 +239,18 @@ pub fn get_builtin(name: &String) -> Option<Object> {
     }
     if name.eq("puts") {
         return Some(Object::BUILTIN(builtin_puts));
+    }
+    if name.eq("str") {
+        return Some(Object::BUILTIN(builtin_str));
+    }
+    if name.eq("int") {
+        return Some(Object::BUILTIN(builtin_int));
+    }
+    if name.eq("input") {
+        return Some(Object::BUILTIN(builtin_input));
+    }
+    if name.eq("split") {
+        return Some(Object::BUILTIN(builtin_split));
     }
     None
 }

@@ -2,6 +2,7 @@ use std::{ops::Add, rc::Rc};
 
 use crate::{
     ast::*,
+    parser::{ParseError, Parser},
     precedence::{precedence, LOWEST, PREFIX},
     token::Token,
 };
@@ -31,7 +32,7 @@ impl Formattable for IntLiteral {
 impl Formattable for StringLiteral {
     fn format(&self, _indent: u8, _indent_size: u8, _parent_precedence: i32) -> String {
         match &self.token {
-            Token::STRING(name) => name.to_string(),
+            Token::STRING(name) => format!("\"{}\"", name.to_string()),
             _ => unreachable!(),
         }
     }
@@ -133,7 +134,7 @@ fn make_indent(spaces: u8) -> String {
 impl Formattable for LetStatement {
     fn format(&self, indent: u8, indent_size: u8, _parent_precedence: i32) -> String {
         format!(
-            "let {} = {};",
+            "let {} = {}",
             self.ident.format(indent, indent_size, LOWEST),
             self.value.format(indent, indent_size, LOWEST)
         )
@@ -143,7 +144,7 @@ impl Formattable for LetStatement {
 impl Formattable for ReturnStatement {
     fn format(&self, indent: u8, indent_size: u8, _parent_precedence: i32) -> String {
         format!(
-            "retrun {};",
+            "return {}",
             self.return_value.format(indent, indent_size, LOWEST),
         )
     }
@@ -184,8 +185,8 @@ fn format_statements(statements: &Vec<Rc<dyn Statement>>, indent: u8, indent_siz
             )
         })
         .collect::<Vec<String>>()
-        .join("\n")
-        .add("\n")
+        .join(";\n")
+        .add(";\n")
 }
 
 impl Formattable for BlockStatement {
@@ -238,7 +239,7 @@ impl Formattable for InfixExpression {
             "{} {} {}",
             self.left.format(indent, indent_size, cur_precedence),
             operator_to_string(self.token.clone()),
-            self.right.format(indent, indent_size, cur_precedence),
+            self.right.format(indent, indent_size, cur_precedence + 1),
         );
         if parent_precedence > cur_precedence {
             format!("({})", contet)
@@ -252,6 +253,12 @@ impl Formattable for Program {
     fn format(&self, indent: u8, indent_size: u8, _parent_precedence: i32) -> String {
         format_statements(&self.statements, indent, indent_size)
     }
+}
+
+pub fn run_formatter(tokens: Vec<Token>) -> Result<String, ParseError> {
+    let mut parser = Parser::new(tokens);
+    let formatted = parser.parse_program()?.format(0, 4, LOWEST);
+    Ok(formatted)
 }
 
 #[cfg(test)]

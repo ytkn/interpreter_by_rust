@@ -1,5 +1,5 @@
-use crate::precedence::PREFIX;
 use crate::precedence::LOWEST;
+use crate::precedence::PREFIX;
 use std::rc::Rc;
 
 use crate::{ast::*, precedence::precedence, token::Token};
